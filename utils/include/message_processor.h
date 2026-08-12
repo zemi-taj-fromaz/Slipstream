@@ -3,6 +3,9 @@
 
 #include "market_event.h"
 
+#include <chrono>
+#include <cstdint>
+#include <fstream>
 #include <vector>
 
 class IProcessMsgClass {
@@ -10,6 +13,19 @@ public:
     virtual ~IProcessMsgClass() = default;
 
     virtual void Sink(const MarketEvent& event);
+};
+
+class FileProcessMsg final : public IProcessMsgClass {
+public:
+    explicit FileProcessMsg(const char* path);
+
+    void Sink(const MarketEvent& event) override;
+
+private:
+    std::ofstream file_;
+    std::chrono::steady_clock::time_point last_sink_{};
+    std::uint64_t last_event_timestamp_{0};
+    bool has_last_event_{false};
 };
 
 void ProcessRowsByTimestamp(
