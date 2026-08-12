@@ -11,4 +11,5 @@ target_link_libraries(market_data_client
 target_compile_definitions(market_data_client
     PRIVATE
         SLIPSTREAM_CSV_PATH="${PROJECT_SOURCE_DIR}/Quotes_and_Trades.csv"
+        SLIPSTREAM_EVENT_LOG_PATH="${PROJECT_BINARY_DIR}/market_data_events.csv"
 )

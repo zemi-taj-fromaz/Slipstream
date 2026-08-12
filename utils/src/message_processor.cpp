@@ -1,28 +1,14 @@
 #include "message_processor.h"
 
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
-#include <iterator>
+#include <iostream>
 #include <stdexcept>
-#include <string>
 #include <thread>
 #include <variant>
 
 void IProcessMsgClass::Sink(const MarketEvent&) {
 }
-
-namespace {
-
-[[nodiscard]] std::string Symbol(const MarketEvent& event) {
-    const auto end = std::find(
-        std::begin(event.symbol),
-        std::end(event.symbol),
-        '\0');
-    return {std::begin(event.symbol), end};
-}
-
-} // namespace
 
 FileProcessMsg::FileProcessMsg(const char* path)
     : file_{path} {
@@ -57,7 +43,7 @@ void FileProcessMsg::Sink(const MarketEvent& event) {
     if (std::holds_alternative<Quote>(event.payload)) {
         const auto& quote = std::get<Quote>(event.payload);
         file_ << 'Q' << ','
-              << Symbol(event) << ','
+              << event.symbol << ','
               << quote.bid_price << ','
               << quote.bid_qty << ','
               << quote.ask_price << ','
@@ -65,7 +51,7 @@ void FileProcessMsg::Sink(const MarketEvent& event) {
     } else {
         const auto& trade = std::get<Trade>(event.payload);
         file_ << 'T' << ','
-              << Symbol(event) << ",,,,,"
+              << event.symbol << ",,,,,"
               << trade.price << ','
               << trade.qty << '\n';
     }
@@ -73,6 +59,37 @@ void FileProcessMsg::Sink(const MarketEvent& event) {
     last_sink_ = now;
     last_event_timestamp_ = event.ts;
     has_last_event_ = true;
+}
+
+void ConsoleProcessMsg::Sink(const MarketEvent& event) {
+    std::cout << "ts=" << event.ts
+              << " symbol=" << event.symbol;
+
+    if (std::holds_alternative<Quote>(event.payload)) {
+        const auto& quote = std::get<Quote>(event.payload);
+        std::cout << " type=Q"
+                  << " bid=" << quote.bid_price << 'x' << quote.bid_qty
+                  << " ask=" << quote.ask_price << 'x' << quote.ask_qty;
+    } else {
+        const auto& trade = std::get<Trade>(event.payload);
+        std::cout << " type=T"
+                  << " price=" << trade.price
+                  << " qty=" << trade.qty;
+    }
+
+    std::cout << '\n' << std::flush;
+}
+
+FanoutProcessMsg::FanoutProcessMsg(
+    IProcessMsgClass& first,
+    IProcessMsgClass& second)
+    : first_{first},
+      second_{second} {
+}
+
+void FanoutProcessMsg::Sink(const MarketEvent& event) {
+    first_.Sink(event);
+    second_.Sink(event);
 }
 
 void ProcessRowsByTimestamp(

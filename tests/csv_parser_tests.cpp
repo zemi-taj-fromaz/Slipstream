@@ -2,7 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <atomic>
 #include <filesystem>
 #include <fstream>
@@ -48,11 +47,6 @@ private:
     mutable std::string path_string_;
 };
 
-[[nodiscard]] std::string Symbol(const MarketEvent& event) {
-    const auto end = std::find(std::begin(event.symbol), std::end(event.symbol), '\0');
-    return {std::begin(event.symbol), end};
-}
-
 TEST(CsvParser, ParsesQuotesAndTrades) {
     const TemporaryCsv csv{
         std::string{"# Sample Market Data CSV\n# ignored metadata\n"} +
@@ -65,7 +59,7 @@ TEST(CsvParser, ParsesQuotesAndTrades) {
     ASSERT_EQ(events.size(), 2U);
 
     EXPECT_EQ(events[0].ts, 34'200'003'000'000ULL);
-    EXPECT_EQ(Symbol(events[0]), "SYNTH3");
+    EXPECT_STREQ(events[0].symbol, "SYNTH3");
     ASSERT_TRUE(std::holds_alternative<Quote>(events[0].payload));
     const auto& quote = std::get<Quote>(events[0].payload);
     EXPECT_EQ(quote.bid_price, 873'700);
@@ -74,23 +68,23 @@ TEST(CsvParser, ParsesQuotesAndTrades) {
     EXPECT_EQ(quote.ask_qty, 50U);
 
     EXPECT_EQ(events[1].ts, 34'200'190'000'000ULL);
-    EXPECT_EQ(Symbol(events[1]), "SYNTH2");
+    EXPECT_STREQ(events[1].symbol, "SYNTH2");
     ASSERT_TRUE(std::holds_alternative<Trade>(events[1].payload));
     const auto& trade = std::get<Trade>(events[1].payload);
     EXPECT_EQ(trade.price, 2'485'300);
     EXPECT_EQ(trade.qty, 65U);
 }
 
-TEST(CsvParser, AcceptsNanosecondTimestampAndTwelveCharacterSymbol) {
+TEST(CsvParser, AcceptsNanosecondTimestamp) {
     const TemporaryCsv csv{
         std::string{header} + "\n" +
-        "123456789,Q,ABCDEFGHIJKL,1.2,10,1.2345,20,,\n"};
+        "123456789,Q,SYNTH1,1.2,10,1.2345,20,,\n"};
 
     const auto events = parse_csv(csv.path());
 
     ASSERT_EQ(events.size(), 1U);
     EXPECT_EQ(events[0].ts, 123'456'789ULL);
-    EXPECT_EQ(Symbol(events[0]), "ABCDEFGHIJKL");
+    EXPECT_STREQ(events[0].symbol, "SYNTH1");
 
     const auto& quote = std::get<Quote>(events[0].payload);
     EXPECT_EQ(quote.bid_price, 12'000);

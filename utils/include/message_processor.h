@@ -28,6 +28,24 @@ private:
     bool has_last_event_{false};
 };
 
+class ConsoleProcessMsg final : public IProcessMsgClass {
+public:
+    void Sink(const MarketEvent& event) override;
+};
+
+class FanoutProcessMsg final : public IProcessMsgClass {
+public:
+    FanoutProcessMsg(
+        IProcessMsgClass& first,
+        IProcessMsgClass& second);
+
+    void Sink(const MarketEvent& event) override;
+
+private:
+    IProcessMsgClass& first_;
+    IProcessMsgClass& second_;
+};
+
 void ProcessRowsByTimestamp(
     const std::vector<MarketEvent>& rows,
     IProcessMsgClass& processor);
