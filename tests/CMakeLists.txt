@@ -1,3 +1,20 @@
 include(GoogleTest)
 
-# Add test executables here and register them with gtest_discover_tests().
+add_executable(csv_parser_tests
+    csv_parser_tests.cpp
+)
+
+target_link_libraries(csv_parser_tests
+    PRIVATE
+        csv_parser
+        GTest::gtest_main
+)
+
+target_compile_options(csv_parser_tests
+    PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+)
+
+gtest_discover_tests(csv_parser_tests)
