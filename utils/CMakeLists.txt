@@ -4,10 +4,13 @@ add_library(UTILS STATIC
     csv_parser/src/file_reader.h
     csv_parser/include/market_event.h
     csv_parser/include/parser.h
+    include/message_processor.h
+    src/message_processor.cpp
 )
 
 target_include_directories(UTILS
     PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/csv_parser/include
 )
 
