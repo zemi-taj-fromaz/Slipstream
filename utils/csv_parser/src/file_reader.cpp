@@ -4,16 +4,46 @@
 #include <charconv>
 #include <cerrno>
 #include <cstring>
+#ifdef _WIN32
+#include <fstream>
+#else
 #include <stdexcept>
-#include <string>
 #include <system_error>
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
+
+#include <stdexcept>
+#include <string>
+#include <system_error>
 
 FileReader::FileReader(const char* path) {
+#ifdef _WIN32
+    std::ifstream file{path, std::ios::binary | std::ios::ate};
+    if (!file) {
+        throw std::system_error(errno, std::generic_category(), "open failed");
+    }
+
+    const std::ifstream::pos_type end = file.tellg();
+    if (end < 0) {
+        ThrowRuntimeError("CSV file size is invalid");
+    }
+
+    size_ = static_cast<std::size_t>(end);
+    if (size_ == 0) {
+        return;
+    }
+
+    storage_.resize(size_);
+    file.seekg(0, std::ios::beg);
+    if (!file.read(storage_.data(), static_cast<std::streamsize>(storage_.size()))) {
+        ThrowRuntimeError("CSV file read failed");
+    }
+    mapping_ = storage_.data();
+#else
     fd_ = ::open(path, O_RDONLY | O_CLOEXEC);
     if (fd_ == -1) {
         throw std::system_error(errno, std::generic_category(), "open failed");
@@ -45,15 +75,18 @@ FileReader::FileReader(const char* path) {
 
     // This is an optimization hint. Failure does not make the mapping unusable.
     static_cast<void>(::madvise(mapping_, size_, MADV_SEQUENTIAL));
+#endif
 }
 
 FileReader::~FileReader() {
+#ifndef _WIN32
     if (mapping_ != nullptr) {
         static_cast<void>(::munmap(mapping_, size_));
     }
     if (fd_ != -1) {
         static_cast<void>(::close(fd_));
     }
+#endif
 }
 
 std::vector<MarketEvent> FileReader::Parse() const {
@@ -114,6 +147,7 @@ std::vector<MarketEvent> FileReader::Parse() const {
 
 void FileReader::ThrowSystemError(const char* message) {
     const int error = errno;
+#ifndef _WIN32
     if (mapping_ != nullptr) {
         static_cast<void>(::munmap(mapping_, size_));
         mapping_ = nullptr;
@@ -122,10 +156,14 @@ void FileReader::ThrowSystemError(const char* message) {
         static_cast<void>(::close(fd_));
         fd_ = -1;
     }
+#else
+    mapping_ = nullptr;
+#endif
     throw std::system_error(error, std::generic_category(), message);
 }
 
 void FileReader::ThrowRuntimeError(std::string_view message) {
+#ifndef _WIN32
     if (mapping_ != nullptr) {
         static_cast<void>(::munmap(mapping_, size_));
         mapping_ = nullptr;
@@ -134,6 +172,9 @@ void FileReader::ThrowRuntimeError(std::string_view message) {
         static_cast<void>(::close(fd_));
         fd_ = -1;
     }
+#else
+    mapping_ = nullptr;
+#endif
     throw std::runtime_error(std::string(message));
 }
 

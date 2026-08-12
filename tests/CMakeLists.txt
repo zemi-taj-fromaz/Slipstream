@@ -6,7 +6,7 @@ add_executable(csv_parser_tests
 
 target_link_libraries(csv_parser_tests
     PRIVATE
-        csv_parser
+        UTILS
         GTest::gtest_main
 )
 

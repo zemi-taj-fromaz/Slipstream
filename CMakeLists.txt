@@ -12,7 +12,7 @@ include(third_party)
 
 add_executable(Slipstream main.cpp)
 
-add_subdirectory(csv_parser)
+add_subdirectory(utils)
 add_subdirectory(market_data_client)
 add_subdirectory(order_entry_client)
 

@@ -6,6 +6,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#ifdef _WIN32
+#include <string>
+#endif
 #include <string_view>
 #include <vector>
 
@@ -24,9 +27,13 @@ public:
 private:
     static constexpr std::size_t column_count = 9;
 
-    int fd_{-1};
     void* mapping_{nullptr};
     std::size_t size_{0};
+#ifdef _WIN32
+    std::string storage_;
+#else
+    int fd_{-1};
+#endif
 
     [[noreturn]] void ThrowSystemError(const char* message);
     [[noreturn]] void ThrowRuntimeError(std::string_view message);

@@ -4,7 +4,7 @@ add_executable(order_entry_client
 
 target_link_libraries(order_entry_client
     PRIVATE
-        csv_parser
+        UTILS
         spdlog::spdlog
 )
 
