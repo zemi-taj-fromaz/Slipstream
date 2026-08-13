@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace slipstream::codec {
 
@@ -33,6 +34,11 @@ struct DecodeResult {
     std::size_t bytes_consumed{0};
 };
 
+struct StreamDecodeResult {
+    DecodeStatus status{DecodeStatus::need_more_data};
+    std::size_t messages_decoded{0};
+};
+
 [[nodiscard]] std::size_t EncodeMarketEvent(
     const MarketEvent& event,
     std::span<std::byte> output);
@@ -40,6 +46,18 @@ struct DecodeResult {
 [[nodiscard]] DecodeResult DecodeMarketEvent(
     std::span<const std::byte> input,
     MarketEvent& output);
+
+class MarketDataStreamDecoder {
+public:
+    [[nodiscard]] StreamDecodeResult Consume(
+        std::span<const std::byte> input,
+        std::vector<MarketEvent>& output);
+
+    [[nodiscard]] std::size_t BufferedBytes() const noexcept;
+
+private:
+    std::vector<std::byte> pending_;
+};
 
 } // namespace slipstream::codec
 

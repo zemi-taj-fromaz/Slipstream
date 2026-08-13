@@ -35,7 +35,7 @@ std::uint64_t readUint64LittleEndian(std::span<const std::byte> bytes) {
 }
 
 std::int64_t readInt64LittleEndian(std::span<const std::byte> bytes) {
-    return static_cast<std::int64_t>(readUint64LittleEndian(bytes));
+    return std::bit_cast<std::int64_t>(readUint64LittleEndian(bytes));
 }
 
 void writeUint16LittleEndian(std::span<std::byte> bytes, uint16_t value) {
@@ -241,7 +241,48 @@ DecodeResult DecodeMarketEvent(std::span<const std::byte> input, MarketEvent& ou
     }
 
     return {DecodeStatus::error, 0};
+}
 
+StreamDecodeResult MarketDataStreamDecoder::Consume(
+    std::span<const std::byte> input,
+    std::vector<MarketEvent>& output) {
+    pending_.insert(pending_.end(), input.begin(), input.end());
+
+    std::size_t messages_decoded = 0;
+    while (!pending_.empty()) {
+        MarketEvent event{};
+        const DecodeResult result = DecodeMarketEvent(pending_, event);
+
+        if (result.status == DecodeStatus::need_more_data) {
+            return {
+                messages_decoded == 0
+                    ? DecodeStatus::need_more_data
+                    : DecodeStatus::message_ready,
+                messages_decoded,
+            };
+        }
+
+        if (result.status == DecodeStatus::error) {
+            return {DecodeStatus::error, messages_decoded};
+        }
+
+        output.push_back(event);
+        ++messages_decoded;
+        pending_.erase(
+            pending_.begin(),
+            pending_.begin() + static_cast<std::ptrdiff_t>(result.bytes_consumed));
+    }
+
+    return {
+        messages_decoded == 0
+            ? DecodeStatus::need_more_data
+            : DecodeStatus::message_ready,
+        messages_decoded,
+    };
+}
+
+std::size_t MarketDataStreamDecoder::BufferedBytes() const noexcept {
+    return pending_.size();
 }
 
 

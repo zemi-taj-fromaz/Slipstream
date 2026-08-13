@@ -37,3 +37,22 @@ target_compile_options(message_processor_tests
 )
 
 gtest_discover_tests(message_processor_tests)
+
+add_executable(market_data_codec_tests
+    market_data_codec_tests.cpp
+)
+
+target_link_libraries(market_data_codec_tests
+    PRIVATE
+        slipstream_codec
+        GTest::gtest_main
+)
+
+target_compile_options(market_data_codec_tests
+    PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+)
+
+gtest_discover_tests(market_data_codec_tests)
