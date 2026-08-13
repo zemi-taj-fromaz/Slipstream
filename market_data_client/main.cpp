@@ -1,6 +1,9 @@
 #include "parser.h"
 #include "message_processor.h"
+#include "slipstream_codec/market_data_codec.h"
 
+#include <array>
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <vector>
@@ -8,6 +11,28 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+
+namespace {
+
+class CodecProcessMsg final : public IProcessMsgClass {
+public:
+    explicit CodecProcessMsg(spdlog::logger& logger)
+        : logger_{logger} {
+    }
+
+    void Sink(const MarketEvent& event) override {
+        std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
+        const std::size_t encoded_size =
+            slipstream::codec::EncodeMarketEvent(event, buffer);
+
+        logger_.info("Encoded market event into {} bytes", encoded_size);
+    }
+
+private:
+    spdlog::logger& logger_;
+};
+
+} // namespace
 
 int main() {
     constexpr auto csv_path = SLIPSTREAM_CSV_PATH;
@@ -29,8 +54,8 @@ int main() {
             event_log_path);
 
         FileProcessMsg file_processor{event_log_path};
-        ConsoleProcessMsg console_processor;
-        FanoutProcessMsg processor{file_processor, console_processor};
+        CodecProcessMsg codec_processor{logger};
+        FanoutProcessMsg processor{file_processor, codec_processor};
         ProcessRowsByTimestamp(events, processor);
 
         logger.info("Replay complete; wrote {} market events to {}", events.size(), event_log_path);

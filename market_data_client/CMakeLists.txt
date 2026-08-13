@@ -5,6 +5,7 @@ add_executable(market_data_client
 target_link_libraries(market_data_client
     PRIVATE
         UTILS
+        slipstream_codec
         spdlog::spdlog
 )
 
