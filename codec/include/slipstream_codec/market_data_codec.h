@@ -25,7 +25,7 @@ constexpr std::size_t max_market_data_frame_size =
 enum class DecodeStatus {
     message_ready,
     need_more_data,
-    protocol_error,
+    error,
 };
 
 struct DecodeResult {
