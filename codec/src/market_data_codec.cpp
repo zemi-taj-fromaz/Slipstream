@@ -71,6 +71,16 @@ void encodeHeader(std::span<std::byte> bytes, std::uint8_t msgType, std::uint16_
     bytes[3] = static_cast<std::byte>(slipstream::codec::protocol_version);
 }
 
+bool hasExpectedHeader(
+    std::span<const std::byte> input,
+    std::uint8_t expected_message_type,
+    std::size_t expected_body_size) {
+    return input.size() >= frame_header_size &&
+           readUint16LittleEndian(input.first(2)) == expected_body_size &&
+           std::to_integer<std::uint8_t>(input[2]) == expected_message_type &&
+           std::to_integer<std::uint8_t>(input[3]) == protocol_version;
+}
+
 std::size_t encodeQuoteBody(std::span<std::byte> bytes, const MarketEvent& event) {
     std::size_t offset{0uz};
     const Quote& quote = std::get<Quote>(event.payload);
@@ -172,6 +182,14 @@ std::size_t decodeTradeBody(std::span<const std::byte> bytes, MarketEvent& out) 
     return offset;
 }
 
+bool isValid(NewOrderStatus status) {
+    return status == NewOrderStatus::accepted ||
+           status == NewOrderStatus::rejected;
+}
+
+bool isValid(OrderSide side) {
+    return side == OrderSide::buy || side == OrderSide::sell;
+}
 
 }
 
@@ -243,15 +261,138 @@ DecodeResult DecodeMarketEvent(std::span<const std::byte> input, MarketEvent& ou
     return {DecodeStatus::error, 0};
 }
 
+std::size_t EncodeHeartbeat(
+    const HeartbeatMessage& message,
+    std::span<std::byte> output) {
+    constexpr std::size_t frame_size = frame_header_size + heartbeat_body_size;
+    if (output.size() < frame_size) {
+        throw std::runtime_error("output buffer too small for heartbeat frame");
+    }
+
+    encodeHeader(output.first(frame_header_size), heartbeat_message_type, heartbeat_body_size);
+    writeUint64LittleEndian(
+        output.subspan(frame_header_size, heartbeat_body_size),
+        message.ts_ns);
+    return frame_size;
+}
+
+DecodeResult DecodeHeartbeat(
+    std::span<const std::byte> input,
+    HeartbeatMessage& output) {
+    constexpr std::size_t frame_size = frame_header_size + heartbeat_body_size;
+    if (input.size() < frame_header_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+    if (!hasExpectedHeader(input, heartbeat_message_type, heartbeat_body_size)) {
+        return {DecodeStatus::error, 0};
+    }
+    if (input.size() < frame_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+
+    output.ts_ns = readUint64LittleEndian(
+        input.subspan(frame_header_size, heartbeat_body_size));
+    return {DecodeStatus::message_ready, frame_size};
+}
+
+std::size_t EncodeSessionControl(
+    const SessionControlMessage& message,
+    std::span<std::byte> output) {
+    constexpr std::size_t frame_size = frame_header_size + session_control_body_size;
+    if (output.size() < frame_size) {
+        throw std::runtime_error("output buffer too small for session control frame");
+    }
+    if (static_cast<std::uint8_t>(message.state) >
+        static_cast<std::uint8_t>(SessionState::close)) {
+        throw std::runtime_error("invalid session control state");
+    }
+
+    encodeHeader(
+        output.first(frame_header_size),
+        session_control_message_type,
+        session_control_body_size);
+    writeUint64LittleEndian(
+        output.subspan(frame_header_size, sizeof(message.ts_ns)),
+        message.ts_ns);
+    output[frame_header_size + sizeof(message.ts_ns)] =
+        static_cast<std::byte>(message.state);
+    return frame_size;
+}
+
+DecodeResult DecodeSessionControl(
+    std::span<const std::byte> input,
+    SessionControlMessage& output) {
+    constexpr std::size_t frame_size = frame_header_size + session_control_body_size;
+    if (input.size() < frame_header_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+    if (!hasExpectedHeader(
+            input,
+            session_control_message_type,
+            session_control_body_size)) {
+        return {DecodeStatus::error, 0};
+    }
+    if (input.size() < frame_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+
+    const std::uint8_t raw_state = std::to_integer<std::uint8_t>(input[12]);
+    if (raw_state > static_cast<std::uint8_t>(SessionState::close)) {
+        return {DecodeStatus::error, 0};
+    }
+
+    output.ts_ns = readUint64LittleEndian(input.subspan(frame_header_size, 8));
+    output.state = static_cast<SessionState>(raw_state);
+    return {DecodeStatus::message_ready, frame_size};
+}
+
+DecodeResult DecodeMarketDataMessage(
+    std::span<const std::byte> input,
+    MarketDataMessage& output) {
+    if (input.size() < frame_header_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+
+    const std::uint8_t message_type = std::to_integer<std::uint8_t>(input[2]);
+    if (message_type == quote_message_type || message_type == trade_message_type) {
+        MarketEvent event{};
+        const DecodeResult result = DecodeMarketEvent(input, event);
+        if (result.status == DecodeStatus::message_ready) {
+            output = event;
+        }
+        return result;
+    }
+
+    if (message_type == heartbeat_message_type) {
+        HeartbeatMessage heartbeat{};
+        const DecodeResult result = DecodeHeartbeat(input, heartbeat);
+        if (result.status == DecodeStatus::message_ready) {
+            output = heartbeat;
+        }
+        return result;
+    }
+
+    if (message_type == session_control_message_type) {
+        SessionControlMessage session_control{};
+        const DecodeResult result = DecodeSessionControl(input, session_control);
+        if (result.status == DecodeStatus::message_ready) {
+            output = session_control;
+        }
+        return result;
+    }
+
+    return {DecodeStatus::error, 0};
+}
+
 StreamDecodeResult MarketDataStreamDecoder::Consume(
     std::span<const std::byte> input,
-    std::vector<MarketEvent>& output) {
+    std::vector<MarketDataMessage>& output) {
     pending_.insert(pending_.end(), input.begin(), input.end());
 
     std::size_t messages_decoded = 0;
     while (!pending_.empty()) {
-        MarketEvent event{};
-        const DecodeResult result = DecodeMarketEvent(pending_, event);
+        MarketDataMessage message{};
+        const DecodeResult result = DecodeMarketDataMessage(pending_, message);
 
         if (result.status == DecodeStatus::need_more_data) {
             return {
@@ -266,7 +407,7 @@ StreamDecodeResult MarketDataStreamDecoder::Consume(
             return {DecodeStatus::error, messages_decoded};
         }
 
-        output.push_back(event);
+        output.push_back(message);
         ++messages_decoded;
         pending_.erase(
             pending_.begin(),
@@ -282,6 +423,211 @@ StreamDecodeResult MarketDataStreamDecoder::Consume(
 }
 
 std::size_t MarketDataStreamDecoder::BufferedBytes() const noexcept {
+    return pending_.size();
+}
+
+std::size_t EncodeNewOrder(
+    const NewOrderMessage& message,
+    std::span<std::byte> output) {
+    constexpr std::size_t frame_size = frame_header_size + new_order_body_size;
+    if (output.size() < frame_size) {
+        throw std::runtime_error("output buffer too small for NewOrder frame");
+    }
+    if (!isValid(message.status) || !isValid(message.side)) {
+        throw std::runtime_error("invalid NewOrder enum value");
+    }
+
+    encodeHeader(output.first(frame_header_size), new_order_message_type, new_order_body_size);
+    std::size_t offset = frame_header_size;
+
+    writeUint64LittleEndian(output.subspan(offset, 8), message.client_order_id);
+    offset += 8;
+    std::memcpy(output.data() + offset, message.symbol, sizeof(message.symbol));
+    offset += sizeof(message.symbol);
+    output[offset++] = static_cast<std::byte>(message.status);
+    writeUint64LittleEndian(output.subspan(offset, 8), message.ts_ns);
+    offset += 8;
+    writeInt64LittleEndian(output.subspan(offset, 8), message.trade_id);
+    offset += 8;
+    output[offset++] = static_cast<std::byte>(message.side);
+    writeUint32LittleEndian(output.subspan(offset, 4), message.qty);
+    offset += 4;
+    writeInt64LittleEndian(output.subspan(offset, 8), message.limit_px);
+    offset += 8;
+
+    return offset;
+}
+
+DecodeResult DecodeNewOrder(
+    std::span<const std::byte> input,
+    NewOrderMessage& output) {
+    constexpr std::size_t frame_size = frame_header_size + new_order_body_size;
+    if (input.size() < frame_header_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+    if (!hasExpectedHeader(input, new_order_message_type, new_order_body_size)) {
+        return {DecodeStatus::error, 0};
+    }
+    if (input.size() < frame_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+
+    std::size_t offset = frame_header_size;
+    output.client_order_id = readUint64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+    std::memcpy(output.symbol, input.data() + offset, sizeof(output.symbol));
+    offset += sizeof(output.symbol);
+    output.status = static_cast<NewOrderStatus>(
+        std::to_integer<unsigned char>(input[offset++]));
+    output.ts_ns = readUint64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+    output.trade_id = readInt64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+    output.side = static_cast<OrderSide>(
+        std::to_integer<unsigned char>(input[offset++]));
+    output.qty = readUint32LittleEndian(input.subspan(offset, 4));
+    offset += 4;
+    output.limit_px = readInt64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+
+    if (!isValid(output.status) || !isValid(output.side)) {
+        return {DecodeStatus::error, 0};
+    }
+    return {DecodeStatus::message_ready, offset};
+}
+
+std::size_t EncodeExecReport(
+    const ExecReportMessage& message,
+    std::span<std::byte> output) {
+    constexpr std::size_t frame_size = frame_header_size + exec_report_body_size;
+    if (output.size() < frame_size) {
+        throw std::runtime_error("output buffer too small for ExecReport frame");
+    }
+    if (static_cast<std::uint8_t>(message.status) >
+            static_cast<std::uint8_t>(ExecStatus::reject) ||
+        static_cast<std::uint8_t>(message.reason_code) >
+            static_cast<std::uint8_t>(RejectReason::throttle)) {
+        throw std::runtime_error("invalid ExecReport enum value");
+    }
+
+    encodeHeader(output.first(frame_header_size), exec_report_message_type, exec_report_body_size);
+    std::size_t offset = frame_header_size;
+
+    writeUint64LittleEndian(output.subspan(offset, 8), message.client_order_id);
+    offset += 8;
+    writeUint64LittleEndian(output.subspan(offset, 8), message.ts_ns);
+    offset += 8;
+    output[offset++] = static_cast<std::byte>(message.status);
+    writeUint32LittleEndian(output.subspan(offset, 4), message.filled_qty);
+    offset += 4;
+    writeInt64LittleEndian(output.subspan(offset, 8), message.avg_px);
+    offset += 8;
+    output[offset++] = static_cast<std::byte>(message.reason_code);
+
+    return offset;
+}
+
+DecodeResult DecodeExecReport(
+    std::span<const std::byte> input,
+    ExecReportMessage& output) {
+    constexpr std::size_t frame_size = frame_header_size + exec_report_body_size;
+    if (input.size() < frame_header_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+    if (!hasExpectedHeader(input, exec_report_message_type, exec_report_body_size)) {
+        return {DecodeStatus::error, 0};
+    }
+    if (input.size() < frame_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+
+    std::size_t offset = frame_header_size;
+    output.client_order_id = readUint64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+    output.ts_ns = readUint64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+    output.status = static_cast<ExecStatus>(
+        std::to_integer<std::uint8_t>(input[offset++]));
+    output.filled_qty = readUint32LittleEndian(input.subspan(offset, 4));
+    offset += 4;
+    output.avg_px = readInt64LittleEndian(input.subspan(offset, 8));
+    offset += 8;
+    output.reason_code = static_cast<RejectReason>(
+        std::to_integer<std::uint8_t>(input[offset++]));
+
+    if (static_cast<std::uint8_t>(output.status) >
+            static_cast<std::uint8_t>(ExecStatus::reject) ||
+        static_cast<std::uint8_t>(output.reason_code) >
+            static_cast<std::uint8_t>(RejectReason::throttle)) {
+        return {DecodeStatus::error, 0};
+    }
+    return {DecodeStatus::message_ready, offset};
+}
+
+DecodeResult DecodeOrderMessage(
+    std::span<const std::byte> input,
+    OrderMessage& output) {
+    if (input.size() < frame_header_size) {
+        return {DecodeStatus::need_more_data, 0};
+    }
+
+    const std::uint8_t type = std::to_integer<std::uint8_t>(input[2]);
+    if (type == new_order_message_type) {
+        NewOrderMessage message{};
+        const DecodeResult result = DecodeNewOrder(input, message);
+        if (result.status == DecodeStatus::message_ready) {
+            output = message;
+        }
+        return result;
+    }
+    if (type == exec_report_message_type) {
+        ExecReportMessage message{};
+        const DecodeResult result = DecodeExecReport(input, message);
+        if (result.status == DecodeStatus::message_ready) {
+            output = message;
+        }
+        return result;
+    }
+    return {DecodeStatus::error, 0};
+}
+
+StreamDecodeResult OrderStreamDecoder::Consume(
+    std::span<const std::byte> input,
+    std::vector<OrderMessage>& output) {
+    pending_.insert(pending_.end(), input.begin(), input.end());
+
+    std::size_t messages_decoded = 0;
+    while (!pending_.empty()) {
+        OrderMessage message{};
+        const DecodeResult result = DecodeOrderMessage(pending_, message);
+        if (result.status == DecodeStatus::need_more_data) {
+            return {
+                messages_decoded == 0
+                    ? DecodeStatus::need_more_data
+                    : DecodeStatus::message_ready,
+                messages_decoded,
+            };
+        }
+        if (result.status == DecodeStatus::error) {
+            return {DecodeStatus::error, messages_decoded};
+        }
+
+        output.push_back(message);
+        ++messages_decoded;
+        pending_.erase(
+            pending_.begin(),
+            pending_.begin() + static_cast<std::ptrdiff_t>(result.bytes_consumed));
+    }
+
+    return {
+        messages_decoded == 0
+            ? DecodeStatus::need_more_data
+            : DecodeStatus::message_ready,
+        messages_decoded,
+    };
+}
+
+std::size_t OrderStreamDecoder::BufferedBytes() const noexcept {
     return pending_.size();
 }
 

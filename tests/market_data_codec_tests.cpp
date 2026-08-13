@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -166,7 +167,7 @@ TEST(MarketDataStreamDecoder, ReassemblesQuoteAtEverySplitBoundary) {
     for (std::size_t split = 0; split <= frame.size(); ++split) {
         SCOPED_TRACE(split);
         MarketDataStreamDecoder decoder;
-        std::vector<MarketEvent> decoded;
+        std::vector<MarketDataMessage> decoded;
 
         const auto first = decoder.Consume(
             std::span<const std::byte>{frame}.first(split),
@@ -176,7 +177,8 @@ TEST(MarketDataStreamDecoder, ReassemblesQuoteAtEverySplitBoundary) {
             decoded);
 
         ASSERT_EQ(decoded.size(), 1U);
-        ExpectSameEvent(expected, decoded.front());
+        ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded.front()));
+        ExpectSameEvent(expected, std::get<MarketEvent>(decoded.front()));
         EXPECT_EQ(decoder.BufferedBytes(), 0U);
         EXPECT_EQ(first.messages_decoded + second.messages_decoded, 1U);
     }
@@ -186,7 +188,7 @@ TEST(MarketDataStreamDecoder, ReassemblesTradeOneByteAtATime) {
     const MarketEvent expected = MakeTrade();
     const auto frame = Encode(expected);
     MarketDataStreamDecoder decoder;
-    std::vector<MarketEvent> decoded;
+    std::vector<MarketDataMessage> decoded;
 
     for (const std::byte byte : frame) {
         const std::array chunk{byte};
@@ -194,7 +196,8 @@ TEST(MarketDataStreamDecoder, ReassemblesTradeOneByteAtATime) {
     }
 
     ASSERT_EQ(decoded.size(), 1U);
-    ExpectSameEvent(expected, decoded.front());
+    ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded.front()));
+    ExpectSameEvent(expected, std::get<MarketEvent>(decoded.front()));
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
@@ -211,11 +214,12 @@ TEST(MarketDataStreamDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
         trade_frame.begin() + 10);
 
     MarketDataStreamDecoder decoder;
-    std::vector<MarketEvent> decoded;
+    std::vector<MarketDataMessage> decoded;
     const auto first = decoder.Consume(first_chunk, decoded);
 
     ASSERT_EQ(decoded.size(), 1U);
-    ExpectSameEvent(quote, decoded[0]);
+    ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded[0]));
+    ExpectSameEvent(quote, std::get<MarketEvent>(decoded[0]));
     EXPECT_EQ(first.messages_decoded, 1U);
     EXPECT_EQ(decoder.BufferedBytes(), 10U);
 
@@ -224,8 +228,105 @@ TEST(MarketDataStreamDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
         decoded);
 
     ASSERT_EQ(decoded.size(), 2U);
-    ExpectSameEvent(trade, decoded[1]);
+    ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded[1]));
+    ExpectSameEvent(trade, std::get<MarketEvent>(decoded[1]));
     EXPECT_EQ(second.messages_decoded, 1U);
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
+}
+
+TEST(MarketDataCodec, EncodesAndDecodesHeartbeat) {
+    constexpr HeartbeatMessage expected{.ts_ns = 0x0102030405060708ULL};
+    std::array<std::byte, 12> frame{};
+
+    const std::size_t bytes_written = EncodeHeartbeat(expected, frame);
+
+    const std::array<std::byte, 12> expected_bytes{
+        std::byte{0x08}, std::byte{0x00}, std::byte{0x03}, std::byte{0x01},
+        std::byte{0x08}, std::byte{0x07}, std::byte{0x06}, std::byte{0x05},
+        std::byte{0x04}, std::byte{0x03}, std::byte{0x02}, std::byte{0x01},
+    };
+    EXPECT_EQ(bytes_written, expected_bytes.size());
+    EXPECT_EQ(frame, expected_bytes);
+
+    HeartbeatMessage decoded{};
+    const DecodeResult result = DecodeHeartbeat(frame, decoded);
+    EXPECT_EQ(result.status, DecodeStatus::message_ready);
+    EXPECT_EQ(result.bytes_consumed, frame.size());
+    EXPECT_EQ(decoded.ts_ns, expected.ts_ns);
+}
+
+TEST(MarketDataCodec, EncodesAndDecodesSessionControl) {
+    constexpr SessionControlMessage expected{
+        .ts_ns = 0x1112131415161718ULL,
+        .state = SessionState::halt,
+    };
+    std::array<std::byte, 13> frame{};
+
+    const std::size_t bytes_written = EncodeSessionControl(expected, frame);
+
+    const std::array<std::byte, 13> expected_bytes{
+        std::byte{0x09}, std::byte{0x00}, std::byte{0x04}, std::byte{0x01},
+        std::byte{0x18}, std::byte{0x17}, std::byte{0x16}, std::byte{0x15},
+        std::byte{0x14}, std::byte{0x13}, std::byte{0x12}, std::byte{0x11},
+        std::byte{0x01},
+    };
+    EXPECT_EQ(bytes_written, expected_bytes.size());
+    EXPECT_EQ(frame, expected_bytes);
+
+    SessionControlMessage decoded{};
+    const DecodeResult result = DecodeSessionControl(frame, decoded);
+    EXPECT_EQ(result.status, DecodeStatus::message_ready);
+    EXPECT_EQ(result.bytes_consumed, frame.size());
+    EXPECT_EQ(decoded.ts_ns, expected.ts_ns);
+    EXPECT_EQ(decoded.state, expected.state);
+}
+
+TEST(MarketDataCodec, RejectsInvalidSessionControlState) {
+    std::array<std::byte, 13> frame{};
+    static_cast<void>(EncodeSessionControl(
+        SessionControlMessage{.ts_ns = 42, .state = SessionState::open},
+        frame));
+    frame[12] = std::byte{3};
+
+    SessionControlMessage decoded{};
+    const DecodeResult result = DecodeSessionControl(frame, decoded);
+
+    EXPECT_EQ(result.status, DecodeStatus::error);
+    EXPECT_EQ(result.bytes_consumed, 0U);
+}
+
+TEST(MarketDataStreamDecoder, ReassemblesHeartbeatAndSessionControlFromChunks) {
+    constexpr HeartbeatMessage heartbeat{.ts_ns = 123'456};
+    constexpr SessionControlMessage session{
+        .ts_ns = 789'012,
+        .state = SessionState::close,
+    };
+    std::array<std::byte, 12> heartbeat_frame{};
+    std::array<std::byte, 13> session_frame{};
+    static_cast<void>(EncodeHeartbeat(heartbeat, heartbeat_frame));
+    static_cast<void>(EncodeSessionControl(session, session_frame));
+
+    std::vector<std::byte> stream{heartbeat_frame.begin(), heartbeat_frame.end()};
+    stream.insert(stream.end(), session_frame.begin(), session_frame.end());
+
+    MarketDataStreamDecoder decoder;
+    std::vector<MarketDataMessage> decoded;
+    constexpr std::size_t chunk_size = 3;
+
+    for (std::size_t offset = 0; offset < stream.size(); offset += chunk_size) {
+        const std::size_t count = std::min(chunk_size, stream.size() - offset);
+        static_cast<void>(decoder.Consume(
+            std::span<const std::byte>{stream}.subspan(offset, count),
+            decoded));
+    }
+
+    ASSERT_EQ(decoded.size(), 2U);
+    ASSERT_TRUE(std::holds_alternative<HeartbeatMessage>(decoded[0]));
+    EXPECT_EQ(std::get<HeartbeatMessage>(decoded[0]).ts_ns, heartbeat.ts_ns);
+    ASSERT_TRUE(std::holds_alternative<SessionControlMessage>(decoded[1]));
+    const auto& decoded_session = std::get<SessionControlMessage>(decoded[1]);
+    EXPECT_EQ(decoded_session.ts_ns, session.ts_ns);
+    EXPECT_EQ(decoded_session.state, session.state);
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
