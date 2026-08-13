@@ -1,46 +1,37 @@
 #include "slipstream_codec/market_data_codec.h"
 
-#include <array>
+#include <bit>
 #include <cstddef>
 #include <cstring>
 #include <span>
 #include <stdexcept>
 #include <variant>
-
-
+#include <vector>
 
 namespace slipstream::codec {
 
 namespace {
 
-uint16_t readUint16LittleEndian(std::span<const std::byte> bytes) {
-    uint16_t value{0u};
-    value |= static_cast<std::uint16_t>(bytes[0]);
-    value |= static_cast<std::uint16_t>(bytes[1] << 8);
+template <typename Integer>
+Integer readUnsignedLittleEndian(std::span<const std::byte> bytes) {
+    Integer value{0};
+    for (std::size_t index = 0; index < sizeof(Integer); ++index) {
+        value |= static_cast<Integer>(std::to_integer<unsigned int>(bytes[index]))
+                 << (index * 8);
+    }
     return value;
 }
 
-uint32_t readUint32LittleEndian(std::span<const std::byte> bytes) {
-    uint16_t value{0u};
-    value |= static_cast<std::uint16_t>(bytes[0]);
-    value |= static_cast<std::uint16_t>(bytes[1] << 8);
-    value |= static_cast<std::uint16_t>(bytes[2] << 16);
-    value |= static_cast<std::uint16_t>(bytes[3] << 24);
-    return value;
+std::uint16_t readUint16LittleEndian(std::span<const std::byte> bytes) {
+    return readUnsignedLittleEndian<std::uint16_t>(bytes);
 }
 
-uint64_t readUint64LittleEndian(std::span<const std::byte> bytes) {
-    uint16_t value{0u};
-    value |= static_cast<std::uint16_t>(bytes[0]);
-    value |= static_cast<std::uint16_t>(bytes[1] << 8);
-    value |= static_cast<std::uint16_t>(bytes[2] << 16);
-    value |= static_cast<std::uint16_t>(bytes[3] << 24);
-    value |= static_cast<std::uint16_t>(bytes[4] << 32);
-    value |= static_cast<std::uint16_t>(bytes[5] << 40);
-    value |= static_cast<std::uint16_t>(bytes[6] << 48);
-    value |= static_cast<std::uint16_t>(bytes[7] << 56);
+std::uint32_t readUint32LittleEndian(std::span<const std::byte> bytes) {
+    return readUnsignedLittleEndian<std::uint32_t>(bytes);
+}
 
-    return value;
+std::uint64_t readUint64LittleEndian(std::span<const std::byte> bytes) {
+    return readUnsignedLittleEndian<std::uint64_t>(bytes);
 }
 
 std::int64_t readInt64LittleEndian(std::span<const std::byte> bytes) {
@@ -52,19 +43,11 @@ void writeUint16LittleEndian(std::span<std::byte> bytes, uint16_t value) {
     bytes[1] = static_cast<std::byte>((value >> 8) & 0xFF);
 }
 
-void writeInt16LittleEndian(std::span<std::byte> bytes, int16_t value) {
-    writeUint16LittleEndian(bytes, static_cast<std::uint16_t>(value));
-}
-
 void writeUint32LittleEndian(std::span<std::byte> bytes, uint32_t value) {
     bytes[0] = static_cast<std::byte>(value & 0xFF);
     bytes[1] = static_cast<std::byte>((value >> 8) & 0xFF);
     bytes[2] = static_cast<std::byte>((value >> 16) & 0xFF);
     bytes[3] = static_cast<std::byte>((value >> 24) & 0xFF);
-}
-
-void writeInt32LittleEndian(std::span<std::byte> bytes, int32_t value) {
-    writeUint32LittleEndian(bytes, static_cast<std::uint32_t>(value));
 }
 
 void writeUint64LittleEndian(std::span<std::byte> bytes, uint64_t value) {
@@ -79,7 +62,7 @@ void writeUint64LittleEndian(std::span<std::byte> bytes, uint64_t value) {
 }
 
 void writeInt64LittleEndian(std::span<std::byte> bytes, int64_t value) {
-    writeUint64LittleEndian(bytes, static_cast<std::uint64_t>(value));
+    writeUint64LittleEndian(bytes, std::bit_cast<std::uint64_t>(value));
 }
 
 void encodeHeader(std::span<std::byte> bytes, std::uint8_t msgType, std::uint16_t body_len) {
@@ -115,6 +98,7 @@ std::size_t encodeQuoteBody(std::span<std::byte> bytes, const MarketEvent& event
 
 std::size_t decodeQuoteBody(std::span<const std::byte> bytes, MarketEvent& out) {
     std::size_t offset{0uz};
+    out.payload = Quote{};
     Quote& quote = std::get<Quote>(out.payload);
 
     std::memcpy(out.symbol, bytes.data() + offset, 12);
@@ -165,6 +149,7 @@ std::size_t encodeTradeBody(std::span<std::byte> bytes, const MarketEvent& event
 
 std::size_t decodeTradeBody(std::span<const std::byte> bytes, MarketEvent& out) {
     std::size_t offset{0uz};
+    out.payload = Trade{};
     Trade& trade = std::get<Trade>(out.payload);
 
     std::memcpy(out.symbol, bytes.data() + offset, 12);
@@ -173,16 +158,16 @@ std::size_t decodeTradeBody(std::span<const std::byte> bytes, MarketEvent& out) 
     out.ts = readUint64LittleEndian(bytes.subspan(offset, 8));
     offset += 8uz;
 
-    trade.bid_qty = readUint32LittleEndian(bytes.subspan(offset, 4));
+    trade.qty = readUint32LittleEndian(bytes.subspan(offset, 4));
     offset += 4uz;
 
-    trade.bid_price = readInt64LittleEndian(bytes.subspan(offset, 8));
+    trade.price = readInt64LittleEndian(bytes.subspan(offset, 8));
     offset += 8uz;
 
-    trade.ask_qty = readUint32LittleEndian(bytes.subspan(offset, 4));
-    offset += 4uz;
+    trade.aggressor = static_cast<char>(std::to_integer<unsigned char>(bytes[offset]));
+    offset += 1uz;
 
-    trade.ask_price = readInt64LittleEndian(bytes.subspan(offset, 8));
+    trade.id = readInt64LittleEndian(bytes.subspan(offset, 8));
     offset += 8uz;
     return offset;
 }
@@ -217,7 +202,7 @@ std::size_t EncodeMarketEvent(const MarketEvent& event, std::span<std::byte> out
     throw std::logic_error("unknown MarketEvent payload type");
 }
 
-DecodeResult DecodeMarketEvent(std::span<const std::byte> input,MarketEvent& output) {
+DecodeResult DecodeMarketEvent(std::span<const std::byte> input, MarketEvent& output) {
     if (input.size() < frame_header_size) {
         return {DecodeStatus::need_more_data, 0};
     }
@@ -225,6 +210,10 @@ DecodeResult DecodeMarketEvent(std::span<const std::byte> input,MarketEvent& out
     const std::uint16_t body_len = readUint16LittleEndian(input.subspan(0, 2));
     const std::uint8_t msg_type = std::to_integer<std::uint8_t>(input[2]);
     const std::uint8_t version = std::to_integer<std::uint8_t>(input[3]);
+
+    if (version != protocol_version) {
+        return {DecodeStatus::error, 0};
+    }
 
     const std::size_t frame_size = frame_header_size + body_len;
     if (input.size() < frame_size) {
