@@ -163,9 +163,9 @@ std::size_t encodeTradeBody(std::span<std::byte> bytes, const MarketEvent& event
 }
 
 
-std::size_t decodeQuoteBody(std::span<const std::byte> bytes, MarketEvent& out) {
+std::size_t decodeTradeBody(std::span<const std::byte> bytes, MarketEvent& out) {
     std::size_t offset{0uz};
-    Quote& quote = std::get<Quote>(out.payload);
+    Trade& trade = std::get<Trade>(out.payload);
 
     std::memcpy(out.symbol, bytes.data() + offset, 12);
     offset += 12uz;
@@ -173,16 +173,16 @@ std::size_t decodeQuoteBody(std::span<const std::byte> bytes, MarketEvent& out) 
     out.ts = readUint64LittleEndian(bytes.subspan(offset, 8));
     offset += 8uz;
 
-    quote.bid_qty = readUint32LittleEndian(bytes.subspan(offset, 4));
+    trade.bid_qty = readUint32LittleEndian(bytes.subspan(offset, 4));
     offset += 4uz;
 
-    quote.bid_price = readInt64LittleEndian(bytes.subspan(offset, 8));
+    trade.bid_price = readInt64LittleEndian(bytes.subspan(offset, 8));
     offset += 8uz;
 
-    quote.ask_qty = readUint32LittleEndian(bytes.subspan(offset, 4));
+    trade.ask_qty = readUint32LittleEndian(bytes.subspan(offset, 4));
     offset += 4uz;
 
-    quote.ask_price = readInt64LittleEndian(bytes.subspan(offset, 8));
+    trade.ask_price = readInt64LittleEndian(bytes.subspan(offset, 8));
     offset += 8uz;
     return offset;
 }
