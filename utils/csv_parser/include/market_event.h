@@ -16,7 +16,9 @@ struct Quote {
 
 struct Trade {
     std::int64_t price;
+    std::int64_t id;
     std::uint32_t qty;
+    char aggressor{'?'};
 };
 
 struct MarketEvent {
