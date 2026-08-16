@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "message_processor.h"
+#include "replay_start.h"
 #include "socket.h"
 
 #include "slipstream_codec/market_data_codec.h"
@@ -13,8 +14,6 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-
-#include "../utils/message_processor/include/message_processor.h"
 
 namespace {
 
@@ -60,9 +59,8 @@ private:
 
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
     constexpr auto csv_path = SLIPSTREAM_CSV_PATH;
-    constexpr auto event_log_path = SLIPSTREAM_EVENT_LOG_PATH;
 
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
@@ -72,19 +70,21 @@ int main() {
     spdlog::logger logger{"market_data_client", sinks.begin(), sinks.end()};
 
     try {
+        const std::uint64_t start_at_ns =
+            utils::ParseReplayStartNs(argc, argv);
         const auto events = parse_csv(csv_path);
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
-
-        logger.info(
-            "Starting real-time replay; output file: {}",
-            event_log_path);
+        logger.info("Replay starts at Unix nanoseconds {}", start_at_ns);
 
         NetworkProcessMsg net_processor{9001};
-        ProcessRowsByTimestamp<EventType::Quote>(events, net_processor);
+        ProcessRowsByTimestamp<EventType::Quote>(
+            events,
+            net_processor,
+            start_at_ns);
 
-        logger.info("Replay complete; wrote {} market events to {}", events.size(), event_log_path);
+        logger.info("Market-data replay complete");
     } catch (const std::exception& error) {
-        logger.error("Failed to parse {}: {}", csv_path, error.what());
+        logger.error("Market-data client failed: {}", error.what());
         return 1;
     }
 

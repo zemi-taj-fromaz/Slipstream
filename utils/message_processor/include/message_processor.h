@@ -7,6 +7,8 @@
 #include <chrono>
 #include <cstdint>
 #include <fstream>
+#include <limits>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -57,12 +59,31 @@ enum class EventType {
 template <EventType event_type>
 void ProcessRowsByTimestamp(
     const std::vector<MarketEvent>& rows,
-    IProcessMsgClass& processor) {
+    IProcessMsgClass& processor,
+    std::uint64_t start_at_ns) {
     if (rows.empty()) {
         return;
     }
 
-    const auto replay_start = std::chrono::steady_clock::now();
+    const auto system_now = std::chrono::system_clock::now();
+    const auto steady_now = std::chrono::steady_clock::now();
+    using NanosecondsRep = std::chrono::nanoseconds::rep;
+
+    if (start_at_ns >
+        static_cast<std::uint64_t>(std::numeric_limits<NanosecondsRep>::max())) {
+        throw std::invalid_argument("replay start time is out of range");
+    }
+
+    const auto start_at = std::chrono::system_clock::time_point{
+        std::chrono::nanoseconds{static_cast<NanosecondsRep>(start_at_ns)}};
+
+    if (start_at <= system_now) {
+        throw std::runtime_error("replay start time has already passed");
+    }
+
+    const auto replay_start = steady_now +
+        std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            start_at - system_now);
     const std::uint64_t first_timestamp = rows.front().ts;
 
     for (const MarketEvent& row : rows) {

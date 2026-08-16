@@ -6,6 +6,8 @@ add_library(UTILS STATIC
     csv_parser/include/parser.h
     message_processor/include/message_processor.h
     message_processor/src/message_processor.cpp
+    replay/include/replay_start.h
+    replay/src/replay_start.cpp
     socket/include/socket.h
     socket/src/socket.cpp
 )
@@ -14,6 +16,7 @@ target_include_directories(UTILS
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/message_processor/include
         ${CMAKE_CURRENT_SOURCE_DIR}/csv_parser/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/replay/include
         ${CMAKE_CURRENT_SOURCE_DIR}/socket/include
 )
 
