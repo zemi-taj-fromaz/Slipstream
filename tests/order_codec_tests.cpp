@@ -198,19 +198,19 @@ TEST(OrderCodec, RejectsOutputBuffersThatAreTooSmall) {
         std::runtime_error);
 }
 
-TEST(OrderStreamDecoder, ReassemblesNewOrderAtEverySplitBoundary) {
+TEST(ClientSideDecoder, ReassemblesNewOrderAtEverySplitBoundary) {
     const NewOrderMessage expected = MakeNewOrder();
     const auto frame = Encode(expected);
 
     for (std::size_t split = 0; split <= frame.size(); ++split) {
         SCOPED_TRACE(split);
-        OrderStreamDecoder decoder;
-        std::vector<OrderMessage> decoded;
+        ClientSideDecoder decoder;
+        std::vector<OrderEntryClientMessage> decoded;
 
-        const auto first = decoder.Consume(
+        const auto first = decoder.Decode(
             std::span<const std::byte>{frame}.first(split),
             decoded);
-        const auto second = decoder.Consume(
+        const auto second = decoder.Decode(
             std::span<const std::byte>{frame}.subspan(split),
             decoded);
 
@@ -222,51 +222,52 @@ TEST(OrderStreamDecoder, ReassemblesNewOrderAtEverySplitBoundary) {
     }
 }
 
-TEST(OrderStreamDecoder, ReassemblesExecReportOneByteAtATime) {
-    const ExecReportMessage expected = MakeExecReport();
-    const auto frame = Encode(expected);
-    OrderStreamDecoder decoder;
-    std::vector<OrderMessage> decoded;
-
-    for (const std::byte byte : frame) {
-        const std::array chunk{byte};
-        static_cast<void>(decoder.Consume(chunk, decoded));
-    }
-
-    ASSERT_EQ(decoded.size(), 1U);
-    ASSERT_TRUE(std::holds_alternative<ExecReportMessage>(decoded[0]));
-    ExpectSame(expected, std::get<ExecReportMessage>(decoded[0]));
-    EXPECT_EQ(decoder.BufferedBytes(), 0U);
-}
-
-TEST(OrderStreamDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
+TEST(ClientSideDecoder, DecodesNewOrderThenPartialHeartbeat) {
     const NewOrderMessage order = MakeNewOrder();
-    const ExecReportMessage report = MakeExecReport();
     const auto order_frame = Encode(order);
-    const auto report_frame = Encode(report);
+    constexpr HeartbeatMessage heartbeat{.ts_ns = 123'456};
+    std::array<std::byte, frame_header_size + heartbeat_body_size>
+        heartbeat_frame{};
+    static_cast<void>(EncodeHeartbeat(heartbeat, heartbeat_frame));
 
     std::vector<std::byte> first_chunk = order_frame;
-    first_chunk.insert(first_chunk.end(), report_frame.begin(), report_frame.begin() + 7);
+    first_chunk.insert(
+        first_chunk.end(),
+        heartbeat_frame.begin(),
+        heartbeat_frame.begin() + 7);
 
-    OrderStreamDecoder decoder;
-    std::vector<OrderMessage> decoded;
-    const auto first = decoder.Consume(first_chunk, decoded);
+    ClientSideDecoder decoder;
+    std::vector<OrderEntryClientMessage> decoded;
+    const auto first = decoder.Decode(first_chunk, decoded);
 
     ASSERT_EQ(decoded.size(), 1U);
     EXPECT_EQ(first.messages_decoded, 1U);
     EXPECT_EQ(decoder.BufferedBytes(), 7U);
 
-    const auto second = decoder.Consume(
-        std::span<const std::byte>{report_frame}.subspan(7),
+    const auto second = decoder.Decode(
+        std::span<const std::byte>{heartbeat_frame}.subspan(7),
         decoded);
 
     ASSERT_EQ(decoded.size(), 2U);
     ASSERT_TRUE(std::holds_alternative<NewOrderMessage>(decoded[0]));
-    ASSERT_TRUE(std::holds_alternative<ExecReportMessage>(decoded[1]));
+    ASSERT_TRUE(std::holds_alternative<HeartbeatMessage>(decoded[1]));
     ExpectSame(order, std::get<NewOrderMessage>(decoded[0]));
-    ExpectSame(report, std::get<ExecReportMessage>(decoded[1]));
+    EXPECT_EQ(
+        std::get<HeartbeatMessage>(decoded[1]).ts_ns,
+        heartbeat.ts_ns);
     EXPECT_EQ(second.messages_decoded, 1U);
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
+}
+
+TEST(ClientSideDecoder, RejectsOptionalExecReportForNow) {
+    const auto frame = Encode(MakeExecReport());
+    ClientSideDecoder decoder;
+    std::vector<OrderEntryClientMessage> decoded;
+
+    const auto result = decoder.Decode(frame, decoded);
+
+    EXPECT_EQ(result.status, DecodeStatus::error);
+    EXPECT_TRUE(decoded.empty());
 }
 
 } // namespace

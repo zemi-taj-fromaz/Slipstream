@@ -48,11 +48,6 @@ struct SessionControlMessage {
     SessionState state{SessionState::open};
 };
 
-using MarketDataMessage = std::variant<
-    MarketEvent,
-    HeartbeatMessage,
-    SessionControlMessage>;
-
 enum class NewOrderStatus : char {
     accepted = 'A',
     rejected = 'R',
@@ -73,6 +68,11 @@ struct NewOrderMessage {
     std::uint32_t qty{0};
     std::int64_t limit_px{0};
 };
+
+using OrderEntryClientMessage = std::variant<
+    NewOrderMessage,
+    HeartbeatMessage,
+    SessionControlMessage>;
 
 enum class ExecStatus : std::uint8_t {
     ack = 0,
@@ -97,8 +97,6 @@ struct ExecReportMessage {
     std::int64_t avg_px{0};
     RejectReason reason_code{RejectReason::none};
 };
-
-using OrderMessage = std::variant<NewOrderMessage, ExecReportMessage>;
 
 enum class DecodeStatus {
     message_ready,
@@ -140,15 +138,11 @@ struct StreamDecodeResult {
     std::span<const std::byte> input,
     SessionControlMessage& output);
 
-[[nodiscard]] DecodeResult DecodeMarketDataMessage(
-    std::span<const std::byte> input,
-    MarketDataMessage& output);
-
-class MarketDataStreamDecoder {
+class ServerSideDecoder {
 public:
     [[nodiscard]] StreamDecodeResult Decode(
         std::span<const std::byte> input,
-        std::vector<MarketDataMessage>& output);
+        std::vector<MarketEvent>& output);
 
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
@@ -172,15 +166,15 @@ private:
     std::span<const std::byte> input,
     ExecReportMessage& output);
 
-[[nodiscard]] DecodeResult DecodeOrderMessage(
+[[nodiscard]] DecodeResult DecodeOrderEntryClientMessage(
     std::span<const std::byte> input,
-    OrderMessage& output);
+    OrderEntryClientMessage& output);
 
-class OrderStreamDecoder {
+class ClientSideDecoder {
 public:
-    [[nodiscard]] StreamDecodeResult Consume(
+    [[nodiscard]] StreamDecodeResult Decode(
         std::span<const std::byte> input,
-        std::vector<OrderMessage>& output);
+        std::vector<OrderEntryClientMessage>& output);
 
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 

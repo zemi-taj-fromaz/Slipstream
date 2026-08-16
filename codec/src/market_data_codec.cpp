@@ -346,53 +346,15 @@ DecodeResult DecodeSessionControl(
     return {DecodeStatus::message_ready, frame_size};
 }
 
-DecodeResult DecodeMarketDataMessage(
+StreamDecodeResult ServerSideDecoder::Decode(
     std::span<const std::byte> input,
-    MarketDataMessage& output) {
-    if (input.size() < frame_header_size) {
-        return {DecodeStatus::need_more_data, 0};
-    }
-
-    const std::uint8_t message_type = std::to_integer<std::uint8_t>(input[2]);
-    if (message_type == quote_message_type || message_type == trade_message_type) {
-        MarketEvent event{};
-        const DecodeResult result = DecodeMarketEvent(input, event);
-        if (result.status == DecodeStatus::message_ready) {
-            output = event;
-        }
-        return result;
-    }
-
-    if (message_type == heartbeat_message_type) {
-        HeartbeatMessage heartbeat{};
-        const DecodeResult result = DecodeHeartbeat(input, heartbeat);
-        if (result.status == DecodeStatus::message_ready) {
-            output = heartbeat;
-        }
-        return result;
-    }
-
-    if (message_type == session_control_message_type) {
-        SessionControlMessage session_control{};
-        const DecodeResult result = DecodeSessionControl(input, session_control);
-        if (result.status == DecodeStatus::message_ready) {
-            output = session_control;
-        }
-        return result;
-    }
-
-    return {DecodeStatus::error, 0};
-}
-
-StreamDecodeResult MarketDataStreamDecoder::Decode(
-    std::span<const std::byte> input,
-    std::vector<MarketDataMessage>& output) {
+    std::vector<MarketEvent>& output) {
     pending_.insert(pending_.end(), input.begin(), input.end());
 
     std::size_t messages_decoded = 0;
     while (!pending_.empty()) {
-        MarketDataMessage message{};
-        const DecodeResult result = DecodeMarketDataMessage(pending_, message);
+        MarketEvent message{};
+        const DecodeResult result = DecodeMarketEvent(pending_, message);
 
         if (result.status == DecodeStatus::need_more_data) {
             return {
@@ -422,7 +384,7 @@ StreamDecodeResult MarketDataStreamDecoder::Decode(
     };
 }
 
-std::size_t MarketDataStreamDecoder::BufferedBytes() const noexcept {
+std::size_t ServerSideDecoder::BufferedBytes() const noexcept {
     return pending_.size();
 }
 
@@ -564,9 +526,9 @@ DecodeResult DecodeExecReport(
     return {DecodeStatus::message_ready, offset};
 }
 
-DecodeResult DecodeOrderMessage(
+DecodeResult DecodeOrderEntryClientMessage(
     std::span<const std::byte> input,
-    OrderMessage& output) {
+    OrderEntryClientMessage& output) {
     if (input.size() < frame_header_size) {
         return {DecodeStatus::need_more_data, 0};
     }
@@ -580,9 +542,17 @@ DecodeResult DecodeOrderMessage(
         }
         return result;
     }
-    if (type == exec_report_message_type) {
-        ExecReportMessage message{};
-        const DecodeResult result = DecodeExecReport(input, message);
+    if (type == heartbeat_message_type) {
+        HeartbeatMessage message{};
+        const DecodeResult result = DecodeHeartbeat(input, message);
+        if (result.status == DecodeStatus::message_ready) {
+            output = message;
+        }
+        return result;
+    }
+    if (type == session_control_message_type) {
+        SessionControlMessage message{};
+        const DecodeResult result = DecodeSessionControl(input, message);
         if (result.status == DecodeStatus::message_ready) {
             output = message;
         }
@@ -591,15 +561,15 @@ DecodeResult DecodeOrderMessage(
     return {DecodeStatus::error, 0};
 }
 
-StreamDecodeResult OrderStreamDecoder::Consume(
+StreamDecodeResult ClientSideDecoder::Decode(
     std::span<const std::byte> input,
-    std::vector<OrderMessage>& output) {
+    std::vector<OrderEntryClientMessage>& output) {
     pending_.insert(pending_.end(), input.begin(), input.end());
 
     std::size_t messages_decoded = 0;
     while (!pending_.empty()) {
-        OrderMessage message{};
-        const DecodeResult result = DecodeOrderMessage(pending_, message);
+        OrderEntryClientMessage message{};
+        const DecodeResult result = DecodeOrderEntryClientMessage(pending_, message);
         if (result.status == DecodeStatus::need_more_data) {
             return {
                 messages_decoded == 0
@@ -627,7 +597,7 @@ StreamDecodeResult OrderStreamDecoder::Consume(
     };
 }
 
-std::size_t OrderStreamDecoder::BufferedBytes() const noexcept {
+std::size_t ClientSideDecoder::BufferedBytes() const noexcept {
     return pending_.size();
 }
 

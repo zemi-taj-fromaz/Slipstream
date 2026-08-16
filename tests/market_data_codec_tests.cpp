@@ -160,48 +160,46 @@ TEST(MarketDataCodec, RejectsUnsupportedProtocolVersion) {
     EXPECT_EQ(result.bytes_consumed, 0U);
 }
 
-TEST(MarketDataStreamDecoder, ReassemblesQuoteAtEverySplitBoundary) {
+TEST(ServerSideDecoder, ReassemblesQuoteAtEverySplitBoundary) {
     const MarketEvent expected = MakeQuote();
     const auto frame = Encode(expected);
 
     for (std::size_t split = 0; split <= frame.size(); ++split) {
         SCOPED_TRACE(split);
-        MarketDataStreamDecoder decoder;
-        std::vector<MarketDataMessage> decoded;
+        ServerSideDecoder decoder;
+        std::vector<MarketEvent> decoded;
 
-        const auto first = decoder.Consume(
+        const auto first = decoder.Decode(
             std::span<const std::byte>{frame}.first(split),
             decoded);
-        const auto second = decoder.Consume(
+        const auto second = decoder.Decode(
             std::span<const std::byte>{frame}.subspan(split),
             decoded);
 
         ASSERT_EQ(decoded.size(), 1U);
-        ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded.front()));
-        ExpectSameEvent(expected, std::get<MarketEvent>(decoded.front()));
+        ExpectSameEvent(expected, decoded.front());
         EXPECT_EQ(decoder.BufferedBytes(), 0U);
         EXPECT_EQ(first.messages_decoded + second.messages_decoded, 1U);
     }
 }
 
-TEST(MarketDataStreamDecoder, ReassemblesTradeOneByteAtATime) {
+TEST(ServerSideDecoder, ReassemblesTradeOneByteAtATime) {
     const MarketEvent expected = MakeTrade();
     const auto frame = Encode(expected);
-    MarketDataStreamDecoder decoder;
-    std::vector<MarketDataMessage> decoded;
+    ServerSideDecoder decoder;
+    std::vector<MarketEvent> decoded;
 
     for (const std::byte byte : frame) {
         const std::array chunk{byte};
-        static_cast<void>(decoder.Consume(chunk, decoded));
+        static_cast<void>(decoder.Decode(chunk, decoded));
     }
 
     ASSERT_EQ(decoded.size(), 1U);
-    ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded.front()));
-    ExpectSameEvent(expected, std::get<MarketEvent>(decoded.front()));
+    ExpectSameEvent(expected, decoded.front());
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
-TEST(MarketDataStreamDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
+TEST(ServerSideDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
     const MarketEvent quote = MakeQuote();
     const MarketEvent trade = MakeTrade();
     const auto quote_frame = Encode(quote);
@@ -213,23 +211,21 @@ TEST(MarketDataStreamDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
         trade_frame.begin(),
         trade_frame.begin() + 10);
 
-    MarketDataStreamDecoder decoder;
-    std::vector<MarketDataMessage> decoded;
-    const auto first = decoder.Consume(first_chunk, decoded);
+    ServerSideDecoder decoder;
+    std::vector<MarketEvent> decoded;
+    const auto first = decoder.Decode(first_chunk, decoded);
 
     ASSERT_EQ(decoded.size(), 1U);
-    ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded[0]));
-    ExpectSameEvent(quote, std::get<MarketEvent>(decoded[0]));
+    ExpectSameEvent(quote, decoded[0]);
     EXPECT_EQ(first.messages_decoded, 1U);
     EXPECT_EQ(decoder.BufferedBytes(), 10U);
 
-    const auto second = decoder.Consume(
+    const auto second = decoder.Decode(
         std::span<const std::byte>{trade_frame}.subspan(10),
         decoded);
 
     ASSERT_EQ(decoded.size(), 2U);
-    ASSERT_TRUE(std::holds_alternative<MarketEvent>(decoded[1]));
-    ExpectSameEvent(trade, std::get<MarketEvent>(decoded[1]));
+    ExpectSameEvent(trade, decoded[1]);
     EXPECT_EQ(second.messages_decoded, 1U);
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
@@ -295,7 +291,7 @@ TEST(MarketDataCodec, RejectsInvalidSessionControlState) {
     EXPECT_EQ(result.bytes_consumed, 0U);
 }
 
-TEST(MarketDataStreamDecoder, ReassemblesHeartbeatAndSessionControlFromChunks) {
+TEST(ClientSideDecoder, ReassemblesHeartbeatAndSessionControlFromChunks) {
     constexpr HeartbeatMessage heartbeat{.ts_ns = 123'456};
     constexpr SessionControlMessage session{
         .ts_ns = 789'012,
@@ -309,13 +305,13 @@ TEST(MarketDataStreamDecoder, ReassemblesHeartbeatAndSessionControlFromChunks) {
     std::vector<std::byte> stream{heartbeat_frame.begin(), heartbeat_frame.end()};
     stream.insert(stream.end(), session_frame.begin(), session_frame.end());
 
-    MarketDataStreamDecoder decoder;
-    std::vector<MarketDataMessage> decoded;
+    ClientSideDecoder decoder;
+    std::vector<OrderEntryClientMessage> decoded;
     constexpr std::size_t chunk_size = 3;
 
     for (std::size_t offset = 0; offset < stream.size(); offset += chunk_size) {
         const std::size_t count = std::min(chunk_size, stream.size() - offset);
-        static_cast<void>(decoder.Consume(
+        static_cast<void>(decoder.Decode(
             std::span<const std::byte>{stream}.subspan(offset, count),
             decoded));
     }

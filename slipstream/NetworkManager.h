@@ -15,7 +15,9 @@
 namespace slipstream {
     class NetworkManager {
     public:
-        NetworkManager(rigtorp::SPSCQueue<MarketEvent>& in, rigtorp::SPSCQueue<codec::OrderMessage>& out);
+        NetworkManager(
+            rigtorp::SPSCQueue<MarketEvent>& in,
+            rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out);
         ~NetworkManager();
 
         NetworkManager(const NetworkManager&) = delete;
@@ -32,22 +34,25 @@ namespace slipstream {
             ::write(
                 wake_fd,
                 &signal,
-                sizeof(signal)):
+                sizeof(signal));
         }
     private:
 
         void resetWakeNotif();
 
-        void recvMarketEvent(utils::Socket& client);
+        void recvMarketEvent(
+            utils::Socket& client,
+            codec::ServerSideDecoder& decoder);
 
         utils::Socket md_listener{};
         utils::Socket oe_listener{};
         bool alive{true};
 
         rigtorp::SPSCQueue<MarketEvent>& ingress;
-        rigtorp::SPSCQueue<codec::OrderMessage>& egress;
+        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& egress;
 
-        codec::MarketDataStreamDecoder md_decoder{};
+        codec::ServerSideDecoder md_decoder{};
+        codec::ServerSideDecoder oe_decoder{};
 
         std::deque<EncodedFrame> send_queue;
         int wake_fd{-1};

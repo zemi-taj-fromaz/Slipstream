@@ -10,7 +10,10 @@
 
 namespace slipstream {
 
-    NetworkManager::NetworkManager(rigtorp::SPSCQueue<MarketEvent>& in, rigtorp::SPSCQueue<codec::OrderMessage>& out) : ingress(in), egress(out) {}
+    NetworkManager::NetworkManager(
+        rigtorp::SPSCQueue<MarketEvent>& in,
+        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out)
+        : ingress(in), egress(out) {}
 
     NetworkManager::~NetworkManager() {}
 
@@ -91,13 +94,13 @@ namespace slipstream {
             drainEgress();
 
             if (poll_fds[md_index].revents & POLLIN) {
-                recvMarketEvent(md_client);
+                recvMarketEvent(md_client, md_decoder);
             }
             if (poll_fds[oe_index].revents & POLLIN) {
-                recvMarketEvent(oe_client);
+                recvMarketEvent(oe_client, oe_decoder);
             }
 
-            if (poll_fds[wake_index].revents & POLLOUT) {
+            if (poll_fds[oe_index].revents & POLLOUT) {
                 flushSendQueue();
             }
 
@@ -105,7 +108,9 @@ namespace slipstream {
         }
     }
 
-    void NetworkManager::recvMarketEvent(utils::Socket& client) {
+    void NetworkManager::recvMarketEvent(
+        utils::Socket& client,
+        codec::ServerSideDecoder& decoder) {
 
         std::array<std::byte, 4096> recv_buffer;
 
@@ -114,16 +119,21 @@ namespace slipstream {
             if (recvd > 0) {
                 const std::span<const std::byte> recv_buffer_span({recv_buffer.data(), static_cast<std::size_t>(recvd)});
 
-                std::vector<codec::MarketDataMessage> recv_messages;
-                auto result = md_decoder.Decode(recv_buffer_span, recv_messages);
+                std::vector<MarketEvent> recv_messages;
+                auto result = decoder.Decode(recv_buffer_span, recv_messages);
 
                 for (auto& recv_message : recv_messages) {
-                    if (auto* event = std::get_if<MarketEvent>(&recv_message)) {
-                        if (!ingress.try_push(std::move(*event))) { throw std::runtime_error("failed to enqueue MarketEvent"); }
+                    if (!ingress.try_push(std::move(recv_message))) {
+                        throw std::runtime_error("failed to enqueue MarketEvent");
                     }
+
                 }
 
-                if (result.status == codec::DecodeStatus::error) { throw std::runtime_error("failed to enqueue MarketEvent"); }
+                if (result.status == codec::DecodeStatus::error) {
+                    throw std::runtime_error("invalid server inbound frame");
+                }
+
+                continue;
             }
 
             if (recvd == 0) {
