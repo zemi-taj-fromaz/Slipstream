@@ -22,7 +22,10 @@ namespace utils {
         Socket(Socket&&) noexcept;
         Socket& operator=(Socket&&) noexcept;
 
-        void SetSockOption(int level, int option, int value);
+        void SetReuseAddress(bool enabled = true);
+        void SetReceiveBufferSize(int size);
+        void SetSendBufferSize(int size);
+        void SetTcpNoDelay(bool enabled = true);
         void Bind(std::uint16_t port);
         void Listen(int backlog = 8); // waits for connection
         [[nodiscard]]
@@ -31,7 +34,7 @@ namespace utils {
         void Connect(const char* address, std::uint16_t port);
 
         ssize_t Recv(std::span<std::byte> buffer);
-        ssize_t Send(std::span<const std::byte> bytes);
+        void SendAll(std::span<const std::byte> bytes);
         void Shutdown(int how);
 
         [[nodiscard]]
@@ -41,6 +44,7 @@ namespace utils {
 
         bool IsValid() const noexcept;
     private:
+        void SetSockOption(int level, int option, int value);
         explicit Socket(int existing) noexcept;
         int fd{-1};
 

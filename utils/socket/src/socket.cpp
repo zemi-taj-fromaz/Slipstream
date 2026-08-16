@@ -6,8 +6,11 @@
 #include <utility>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <cerrno>
+#include <system_error>
 #include <stdexcept>
 
 namespace utils {
@@ -52,6 +55,31 @@ namespace utils {
             }
 
     }
+
+    void Socket::SetReuseAddress(bool enabled) {
+        SetSockOption(SOL_SOCKET, SO_REUSEADDR, enabled ? 1 : 0);
+    }
+
+    void Socket::SetReceiveBufferSize(int size) {
+        if (size <= 0) {
+            throw std::invalid_argument("receive buffer size must be positive");
+        }
+
+        SetSockOption(SOL_SOCKET, SO_RCVBUF, size);
+    }
+
+    void Socket::SetSendBufferSize(int size) {
+        if (size <= 0) {
+            throw std::invalid_argument("send buffer size must be positive");
+        }
+
+        SetSockOption(SOL_SOCKET, SO_SNDBUF, size);
+    }
+
+    void Socket::SetTcpNoDelay(bool enabled) {
+        SetSockOption(IPPROTO_TCP, TCP_NODELAY, enabled ? 1 : 0);
+    }
+
     void Socket::Listen(int backlog) {
         const int result  = ::listen(fd, backlog);
         if (result == -1) { throw std::runtime_error("bind() failed"); }
@@ -81,8 +109,36 @@ namespace utils {
         return ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
     };
 
-    ssize_t Socket::Send(std::span<const std::byte> buffer) {
-        return ::send(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
+    void Socket::SendAll(std::span<const std::byte> bytes) {
+
+        std::size_t offset{};
+
+        while (offset < bytes.size()) {
+            const ssize_t sent = ::send(fd, bytes.data() + offset, bytes.size() - offset, MSG_DONTWAIT | MSG_NOSIGNAL);
+
+            if (sent > 0) {
+                offset += static_cast<std::size_t>(sent);
+                continue;
+            }
+
+            if (sent == 0) {
+                throw std::runtime_error("send() failed");
+            }
+
+            if (errno == EINTR) {
+                continue;
+            }
+
+
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue; // Deliberately busy-spin until send-buffer space exists.
+            }
+
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "send failed");
+        }
     }
 
 

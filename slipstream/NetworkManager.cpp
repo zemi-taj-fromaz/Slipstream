@@ -3,6 +3,7 @@
 //
 
 #include "NetworkManager.h"
+#include "message_processor.h"
 
 #include <ios>
 #include <poll.h>
@@ -21,27 +22,23 @@ namespace slipstream {
 
     void NetworkManager::Process() {
         constexpr int receive_buffer_size = 1024 * 1024;
+        constexpr int send_buffer_size = 1024 * 1024;
 
         //wait for connection
-        md_listener.SetSockOption(SOL_SOCKET, SO_REUSEADDR, 1);
-        md_listener.SetSockOption(
-            SOL_SOCKET,
-            SO_RCVBUF,
-            receive_buffer_size);
+        md_listener.SetReuseAddress();
+        md_listener.SetReceiveBufferSize(receive_buffer_size);
         md_listener.Bind(9001);
         md_listener.Listen();
 
-        oe_listener.SetSockOption(SOL_SOCKET, SO_REUSEADDR, 1);
-        oe_listener.SetSockOption(
-            SOL_SOCKET,
-            SO_RCVBUF,
-            receive_buffer_size);
+        oe_listener.SetReuseAddress();
+        oe_listener.SetReceiveBufferSize(receive_buffer_size);
         oe_listener.Bind(9002);
         oe_listener.Listen();
 
         utils::Socket md_client = md_listener.Accept();
         utils::Socket oe_client = oe_listener.Accept();
-        oe_client.SetSockOption(IPPROTO_TCP, TCP_NODELAY, 1);
+        oe_client.SetTcpNoDelay();
+        oe_client.SetSendBufferSize(send_buffer_size);
 
         std::size_t md_index = 0;
         std::size_t oe_index = 1;
@@ -126,6 +123,7 @@ namespace slipstream {
         codec::ServerSideDecoder& decoder) {
 
         std::array<std::byte, 4096> recv_buffer;
+        ConsoleProcessMsg console_processor;
 
         while (true) {
             const ::ssize_t recvd = client.Recv(recv_buffer);
@@ -136,10 +134,12 @@ namespace slipstream {
                 auto result = decoder.Decode(recv_buffer_span, recv_messages);
 
                 for (auto& recv_message : recv_messages) {
-                    if (!ingress.try_push(std::move(recv_message))) {
-                        throw std::runtime_error("failed to enqueue MarketEvent");
-                    }
+                    // if (!ingress.try_push(std::move(recv_message))) {
+                    //     throw std::runtime_error(
+                    //         "failed to enqueue MarketEvent");
+                    // }
 
+                    console_processor.Sink(recv_message);
                 }
 
                 if (result.status == codec::DecodeStatus::error) {

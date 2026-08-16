@@ -39,6 +39,9 @@ private:
 class NetworkProcessMsg final : public IProcessMsgClass {
 public:
     NetworkProcessMsg(std::uint16_t port) {
+        constexpr int send_buffer_size = 1024 * 1024;
+        socket_.SetTcpNoDelay();
+        socket_.SetSendBufferSize(send_buffer_size);
         socket_.Connect("127.0.0.1", port);
     }
 
@@ -46,7 +49,7 @@ public:
         std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
         const std::size_t encoded_size = slipstream::codec::EncodeMarketEvent(event, buffer);
 
-        socket_.Send({buffer.data(), encoded_size});
+        socket_.SendAll({buffer.data(), encoded_size});
 
         //logger_.info("Encoded market event into {} bytes", encoded_size);
     }
