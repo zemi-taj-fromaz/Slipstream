@@ -2,6 +2,9 @@ include(GoogleTest)
 
 add_executable(csv_parser_tests
     csv_parser_tests.cpp
+        ../slipstream/NetworkManager.cpp
+        ../slipstream/NetworkManager.h
+        ../slipstream/EncodedFrame.h
 )
 
 target_link_libraries(csv_parser_tests

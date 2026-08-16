@@ -1,5 +1,7 @@
 #include "parser.h"
 #include "message_processor.h"
+#include "socket.h"
+
 #include "slipstream_codec/market_data_codec.h"
 
 #include <array>
@@ -11,6 +13,8 @@
 #include <spdlog/logger.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+
+#include "../utils/message_processor/include/message_processor.h"
 
 namespace {
 
@@ -30,6 +34,25 @@ public:
 
 private:
     spdlog::logger& logger_;
+};
+
+class NetworkProcessMsg final : public IProcessMsgClass {
+public:
+    NetworkProcessMsg(std::uint16_t port) {
+        socket_.Connect("127.0.0.1", port);
+    }
+
+    void Sink(const MarketEvent& event) override {
+        std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
+        const std::size_t encoded_size = slipstream::codec::EncodeMarketEvent(event, buffer);
+
+        socket_.Send({buffer.data(), encoded_size});
+
+        //logger_.info("Encoded market event into {} bytes", encoded_size);
+    }
+
+private:
+    utils::Socket socket_;
 };
 
 } // namespace
@@ -53,10 +76,8 @@ int main() {
             "Starting real-time replay; output file: {}",
             event_log_path);
 
-        FileProcessMsg file_processor{event_log_path};
-        CodecProcessMsg codec_processor{logger};
-        FanoutProcessMsg processor{file_processor, codec_processor};
-        ProcessRowsByTimestamp(events, processor);
+        NetworkProcessMsg net_processor{9001};
+        ProcessRowsByTimestamp<EventType::Quote>(events, net_processor);
 
         logger.info("Replay complete; wrote {} market events to {}", events.size(), event_log_path);
     } catch (const std::exception& error) {
