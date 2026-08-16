@@ -9,4 +9,5 @@ target_link_libraries(slipstream
         slipstream_codec
         UTILS
         SPSCQueue::SPSCQueue
+        spdlog::spdlog
 )

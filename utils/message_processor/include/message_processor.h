@@ -9,6 +9,7 @@
 #include <fstream>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -35,7 +36,12 @@ private:
 
 class ConsoleProcessMsg final : public IProcessMsgClass {
 public:
+    explicit ConsoleProcessMsg(std::string process_name = {});
+
     void Sink(const MarketEvent& event) override;
+
+private:
+    std::string process_name_;
 };
 
 class FanoutProcessMsg final : public IProcessMsgClass {

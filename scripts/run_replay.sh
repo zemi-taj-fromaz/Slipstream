@@ -13,13 +13,13 @@ oe_client="${build_dir}/order_entry_client/order_entry_client"
 
 for executable in "${server}" "${md_client}" "${oe_client}"; do
     if [[ ! -x "${executable}" ]]; then
-        echo "missing executable: ${executable}" >&2
+        echo "[launcher] missing executable: ${executable}" >&2
         exit 1
     fi
 done
 
 if [[ ! "${start_delay_seconds}" =~ ^[0-9]+$ ]]; then
-    echo "SLIPSTREAM_START_DELAY_SECONDS must be a non-negative integer" >&2
+    echo "[launcher] SLIPSTREAM_START_DELAY_SECONDS must be a non-negative integer" >&2
     exit 1
 fi
 
@@ -41,14 +41,14 @@ pids+=("$!")
 sleep 0.2
 
 if ! kill -0 "${pids[0]}" 2>/dev/null; then
-    echo "slipstream exited before the clients could connect" >&2
+    echo "[launcher] slipstream exited before the clients could connect" >&2
     exit 1
 fi
 
 now_ns="$(date +%s%N)"
 start_at_ns=$((now_ns + start_delay_seconds * 1000000000))
 
-echo "Replay starts at Unix nanoseconds: ${start_at_ns}"
+echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
 
 "${md_client}" --start-at-ns "${start_at_ns}" &
 pids+=("$!")

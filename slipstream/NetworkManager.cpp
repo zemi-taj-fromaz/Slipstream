@@ -16,7 +16,7 @@ namespace slipstream {
     NetworkManager::NetworkManager(
         rigtorp::SPSCQueue<MarketEvent>& in,
         rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out)
-        : ingress(in), egress(out) {}
+        : ingress(&in), egress(&out) {}
 
     NetworkManager::~NetworkManager() {}
 
@@ -123,7 +123,7 @@ namespace slipstream {
         codec::ServerSideDecoder& decoder) {
 
         std::array<std::byte, 4096> recv_buffer;
-        ConsoleProcessMsg console_processor;
+        ConsoleProcessMsg console_processor{"slipstream"};
 
         while (true) {
             const ::ssize_t recvd = client.Recv(recv_buffer);

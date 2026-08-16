@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <variant>
 
 void IProcessMsgClass::Sink(const MarketEvent&) {
@@ -61,7 +62,15 @@ void FileProcessMsg::Sink(const MarketEvent& event) {
     has_last_event_ = true;
 }
 
+ConsoleProcessMsg::ConsoleProcessMsg(std::string process_name)
+    : process_name_{std::move(process_name)} {
+}
+
 void ConsoleProcessMsg::Sink(const MarketEvent& event) {
+    if (!process_name_.empty()) {
+        std::cout << '[' << process_name_ << "] ";
+    }
+
     std::cout << "ts=" << event.ts
               << " symbol=" << event.symbol;
 
@@ -91,4 +100,3 @@ void FanoutProcessMsg::Sink(const MarketEvent& event) {
     first_.Sink(event);
     second_.Sink(event);
 }
-

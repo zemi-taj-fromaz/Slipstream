@@ -10,11 +10,13 @@
 #include <queue>
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
+#include <unistd.h>
 #include <rigtorp/SPSCQueue.h>
 
 namespace slipstream {
     class NetworkManager {
     public:
+        NetworkManager(){}
         NetworkManager(
             rigtorp::SPSCQueue<MarketEvent>& in,
             rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out);
@@ -48,8 +50,8 @@ namespace slipstream {
         utils::Socket oe_listener{};
         bool alive{true};
 
-        rigtorp::SPSCQueue<MarketEvent>& ingress;
-        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& egress;
+        rigtorp::SPSCQueue<MarketEvent>* ingress;
+        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>* egress;
 
         codec::ServerSideDecoder md_decoder{};
         codec::ServerSideDecoder oe_decoder{};
