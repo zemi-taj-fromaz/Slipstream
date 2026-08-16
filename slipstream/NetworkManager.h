@@ -10,11 +10,12 @@
 #include <queue>
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
+#include <rigtorp/SPSCQueue.h>
 
 namespace slipstream {
     class NetworkManager {
     public:
-        NetworkManager();
+        NetworkManager(rigtorp::SPSCQueue<MarketEvent>& in, rigtorp::SPSCQueue<codec::OrderMessage>& out);
         ~NetworkManager();
 
         NetworkManager(const NetworkManager&) = delete;
@@ -34,11 +35,19 @@ namespace slipstream {
                 sizeof(signal)):
         }
     private:
+
+        void resetWakeNotif();
+
+        void recvMarketEvent(utils::Socket& client);
+
         utils::Socket md_listener{};
         utils::Socket oe_listener{};
         bool alive{true};
 
-        
+        rigtorp::SPSCQueue<MarketEvent>& ingress;
+        rigtorp::SPSCQueue<codec::OrderMessage>& egress;
+
+        codec::MarketDataStreamDecoder md_decoder{};
 
         std::deque<EncodedFrame> send_queue;
         int wake_fd{-1};

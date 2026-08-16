@@ -3,12 +3,15 @@
 //
 
 #include "NetworkManager.h"
+
+#include <ios>
 #include <poll.h>
 #include <system_error>
 
 namespace slipstream {
 
-    NetworkManager::NetworkManager() {}
+    NetworkManager::NetworkManager(rigtorp::SPSCQueue<MarketEvent>& in, rigtorp::SPSCQueue<codec::OrderMessage>& out) : ingress(in), egress(out) {}
+
     NetworkManager::~NetworkManager() {}
 
     void NetworkManager::Process() {
@@ -81,18 +84,95 @@ namespace slipstream {
             if (ready == 0) {
                 continue;
             }
-
-            if () {
-
+            if (poll_fds[wake_index].revents & POLLIN) {
+                resetWakeNotif();
             }
 
-            //poll events
-            //drain outgress queue
-            // check heart
-            //check pollout for sending
-            // set or reset pollout flag
+            drainEgress();
+
+            if (poll_fds[md_index].revents & POLLIN) {
+                recvMarketEvent(md_client);
+            }
+            if (poll_fds[oe_index].revents & POLLIN) {
+                recvMarketEvent(oe_client);
+            }
+
+            if (poll_fds[wake_index].revents & POLLOUT) {
+                flushSendQueue();
+            }
+
+            //TODO check heartbeat
         }
     }
+
+    void NetworkManager::recvMarketEvent(utils::Socket& client) {
+
+        std::array<std::byte, 4096> recv_buffer;
+
+        while (true) {
+            const ::ssize_t recvd = client.Recv(recv_buffer);
+            if (recvd > 0) {
+                const std::span<const std::byte> recv_buffer_span({recv_buffer.data(), static_cast<std::size_t>(recvd)});
+
+                std::vector<codec::MarketDataMessage> recv_messages;
+                auto result = md_decoder.Decode(recv_buffer_span, recv_messages);
+
+                for (auto& recv_message : recv_messages) {
+                    if (auto* event = std::get_if<MarketEvent>(&recv_message)) {
+                        if (!ingress.try_push(std::move(*event))) { throw std::runtime_error("failed to enqueue MarketEvent"); }
+                    }
+                }
+
+                if (result.status == codec::DecodeStatus::error) { throw std::runtime_error("failed to enqueue MarketEvent"); }
+            }
+
+            if (recvd == 0) {
+                // MD client closed its connection cleanly.
+                alive = false;
+                return;
+            }
+            // received == -1
+            if (errno == EINTR) {
+                continue;
+            }
+
+            if (errno == EAGAIN ||
+                errno == EWOULDBLOCK) {
+                // We drained everything currently available.
+                return;
+                }
+
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "market-data recv() failed");
+        }
+    }
+
+
+    void NetworkManager::resetWakeNotif() {
+        std::uint64_t notification_count{};
+
+        const ::ssize_t result = ::read(
+            wake_fd,
+            &notification_count,
+            sizeof(notification_count));
+
+        if (result == sizeof(notification_count)) {
+            return;
+        }
+
+        if (result == -1 &&
+            (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            return;
+        }
+
+        throw std::system_error(
+            errno,
+            std::generic_category(),
+            "failed to reset eventfd notification");
+    }
+
 
 
 }

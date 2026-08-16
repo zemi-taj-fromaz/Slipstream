@@ -5,6 +5,8 @@ add_executable(csv_parser_tests
         ../slipstream/NetworkManager.cpp
         ../slipstream/NetworkManager.h
         ../slipstream/EncodedFrame.h
+        ../slipstream/Engine.cpp
+        ../slipstream/Engine.h
 )
 
 target_link_libraries(csv_parser_tests

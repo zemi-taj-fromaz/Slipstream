@@ -384,7 +384,7 @@ DecodeResult DecodeMarketDataMessage(
     return {DecodeStatus::error, 0};
 }
 
-StreamDecodeResult MarketDataStreamDecoder::Consume(
+StreamDecodeResult MarketDataStreamDecoder::Decode(
     std::span<const std::byte> input,
     std::vector<MarketDataMessage>& output) {
     pending_.insert(pending_.end(), input.begin(), input.end());

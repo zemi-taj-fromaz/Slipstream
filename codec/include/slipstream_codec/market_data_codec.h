@@ -146,7 +146,7 @@ struct StreamDecodeResult {
 
 class MarketDataStreamDecoder {
 public:
-    [[nodiscard]] StreamDecodeResult Consume(
+    [[nodiscard]] StreamDecodeResult Decode(
         std::span<const std::byte> input,
         std::vector<MarketDataMessage>& output);
 
