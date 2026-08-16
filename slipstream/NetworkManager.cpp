@@ -7,6 +7,8 @@
 #include <ios>
 #include <poll.h>
 #include <system_error>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 namespace slipstream {
 
@@ -18,17 +20,28 @@ namespace slipstream {
     NetworkManager::~NetworkManager() {}
 
     void NetworkManager::Process() {
+        constexpr int receive_buffer_size = 1024 * 1024;
+
         //wait for connection
-        md_listener.SetSockOption();
-        md_listener.Bind();
+        md_listener.SetSockOption(SOL_SOCKET, SO_REUSEADDR, 1);
+        md_listener.SetSockOption(
+            SOL_SOCKET,
+            SO_RCVBUF,
+            receive_buffer_size);
+        md_listener.Bind(9001);
         md_listener.Listen();
 
-        oe_listener.SetSockOption();
-        oe_listener.Bind();
+        oe_listener.SetSockOption(SOL_SOCKET, SO_REUSEADDR, 1);
+        oe_listener.SetSockOption(
+            SOL_SOCKET,
+            SO_RCVBUF,
+            receive_buffer_size);
+        oe_listener.Bind(9002);
         oe_listener.Listen();
 
         utils::Socket md_client = md_listener.Accept();
         utils::Socket oe_client = oe_listener.Accept();
+        oe_client.SetSockOption(IPPROTO_TCP, TCP_NODELAY, 1);
 
         std::size_t md_index = 0;
         std::size_t oe_index = 1;
@@ -91,7 +104,7 @@ namespace slipstream {
                 resetWakeNotif();
             }
 
-            drainEgress();
+           //TODO drainEgress();
 
             if (poll_fds[md_index].revents & POLLIN) {
                 recvMarketEvent(md_client, md_decoder);
@@ -100,9 +113,9 @@ namespace slipstream {
                 recvMarketEvent(oe_client, oe_decoder);
             }
 
-            if (poll_fds[oe_index].revents & POLLOUT) {
-                flushSendQueue();
-            }
+          //  if (poll_fds[oe_index].revents & POLLOUT) {
+           //     flushSendQueue();
+           // }
 
             //TODO check heartbeat
         }
