@@ -10,8 +10,11 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 include(CTest)
 include(third_party)
 
-#add_executable(Slipstream main.cpp
-#slipstream/main.cpp)
+add_compile_options(
+    -Wall
+    -Wextra
+    -Wpedantic
+)
 
 add_subdirectory(utils)
 add_subdirectory(codec)

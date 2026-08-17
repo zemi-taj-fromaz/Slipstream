@@ -31,7 +31,9 @@ MarketEvent TradeEvent() {
         .symbol = {},
         .payload = Trade{
             .price = 1'012'400,
+            .id = 0,
             .qty = 75,
+            .aggressor = '?',
         },
     };
     std::strcpy(event.symbol, "SYNTH1");

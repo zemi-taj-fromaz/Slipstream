@@ -11,13 +11,6 @@ target_link_libraries(csv_parser_tests
         GTest::gtest_main
 )
 
-target_compile_options(csv_parser_tests
-    PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-)
-
 gtest_discover_tests(csv_parser_tests)
 
 add_executable(message_processor_tests
@@ -28,13 +21,6 @@ target_link_libraries(message_processor_tests
     PRIVATE
         UTILS
         GTest::gtest_main
-)
-
-target_compile_options(message_processor_tests
-    PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
 )
 
 gtest_discover_tests(message_processor_tests)
@@ -49,13 +35,6 @@ target_link_libraries(market_data_codec_tests
         GTest::gtest_main
 )
 
-target_compile_options(market_data_codec_tests
-    PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-)
-
 gtest_discover_tests(market_data_codec_tests)
 
 add_executable(order_codec_tests
@@ -66,13 +45,6 @@ target_link_libraries(order_codec_tests
     PRIVATE
         slipstream_codec
         GTest::gtest_main
-)
-
-target_compile_options(order_codec_tests
-    PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
 )
 
 gtest_discover_tests(order_codec_tests)

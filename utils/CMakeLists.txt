@@ -21,10 +21,3 @@ target_include_directories(UTILS
 )
 
 target_compile_features(UTILS PUBLIC cxx_std_23)
-
-target_compile_options(UTILS
-    PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-)

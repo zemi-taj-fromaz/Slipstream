@@ -110,8 +110,10 @@ void ProcessRowsByTimestamp(
 
             std::this_thread::sleep_until(replay_start + delay);
         }
-        if (std::holds_alternative<Quote>(row.payload) && event_type == EventType::Quote
-            || std::holds_alternative<Trade>(row.payload) && event_type == EventType::Trade) {
+        if ((std::holds_alternative<Quote>(row.payload) &&
+             event_type == EventType::Quote) ||
+            (std::holds_alternative<Trade>(row.payload) &&
+             event_type == EventType::Trade)) {
             processor.Sink(row);
         }
     }

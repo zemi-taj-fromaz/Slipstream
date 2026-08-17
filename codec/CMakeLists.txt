@@ -19,10 +19,3 @@ target_link_libraries(slipstream_codec
 )
 
 target_compile_features(slipstream_codec PUBLIC cxx_std_23)
-
-target_compile_options(slipstream_codec
-    PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-)
