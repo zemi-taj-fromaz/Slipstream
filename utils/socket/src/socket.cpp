@@ -31,15 +31,34 @@ namespace utils {
     };
 
 
-    void Socket::Bind(std::uint16_t port)
-    {
+    void Socket::Bind(std::uint16_t port) {
+        Bind("0.0.0.0", port);
+    }
+
+    void Socket::Bind(const char* address, std::uint16_t port) {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
-        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+        const int conversion_result =
+            ::inet_pton(AF_INET, address, &addr.sin_addr);
+        if (conversion_result == 0) {
+            throw std::invalid_argument("invalid IPv4 bind address");
+        }
+        if (conversion_result == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "inet_pton() failed for bind address");
+        }
 
         const int result  = ::bind(fd, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr));
-        if (result == -1) { throw std::runtime_error("bind() failed"); }
+        if (result == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "bind() failed");
+        }
     }
 
     void Socket::SetSockOption(int level, int option, int value) {

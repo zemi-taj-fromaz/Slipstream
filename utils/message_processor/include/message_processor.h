@@ -34,6 +34,16 @@ private:
     bool has_last_event_{false};
 };
 
+class CanonicalFileProcessMsg final : public IProcessMsgClass {
+public:
+    explicit CanonicalFileProcessMsg(const char* path);
+
+    void Sink(const MarketEvent& event) override;
+
+private:
+    std::ofstream file_;
+};
+
 class ConsoleProcessMsg final : public IProcessMsgClass {
 public:
     explicit ConsoleProcessMsg(std::string process_name = {});

@@ -4,19 +4,38 @@
 
 #include "NetworkManager.h"
 #include "message_processor.h"
+#include "replay_start.h"
 
 #include <ios>
+#include <memory>
 #include <poll.h>
+#include <string>
 #include <system_error>
+#include <utility>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
 namespace slipstream {
 
     NetworkManager::NetworkManager(
+        std::string md_host,
+        std::uint16_t md_port,
+        std::string oe_host,
+        std::uint16_t oe_port)
+        : md_host_{std::move(md_host)},
+          md_port_{md_port},
+          oe_host_{std::move(oe_host)},
+          oe_port_{oe_port} {}
+
+    NetworkManager::NetworkManager(
         rigtorp::SPSCQueue<MarketEvent>& in,
         rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out)
-        : ingress(&in), egress(&out) {}
+        : md_host_{"127.0.0.1"},
+          md_port_{9001},
+          oe_host_{"127.0.0.1"},
+          oe_port_{9002},
+          ingress(&in),
+          egress(&out) {}
 
     NetworkManager::~NetworkManager() {}
 
@@ -24,15 +43,46 @@ namespace slipstream {
         constexpr int receive_buffer_size = 1024 * 1024;
         constexpr int send_buffer_size = 1024 * 1024;
 
+        ConsoleProcessMsg console_processor{"slipstream"};
+        IProcessMsgClass* md_processor = &console_processor;
+        IProcessMsgClass* oe_processor = &console_processor;
+
+        std::unique_ptr<CanonicalFileProcessMsg> received_quotes;
+        std::unique_ptr<CanonicalFileProcessMsg> received_trades;
+        std::unique_ptr<FanoutProcessMsg> md_fanout;
+        std::unique_ptr<FanoutProcessMsg> oe_fanout;
+
+        if (utils::ReplayVerificationEnabled()) {
+            const std::string received_quotes_path =
+                std::string{SLIPSTREAM_VERIFICATION_DIR} +
+                "/received_quotes.csv";
+            const std::string received_trades_path =
+                std::string{SLIPSTREAM_VERIFICATION_DIR} +
+                "/received_trades.csv";
+
+            received_quotes = std::make_unique<CanonicalFileProcessMsg>(
+                received_quotes_path.c_str());
+            received_trades = std::make_unique<CanonicalFileProcessMsg>(
+                received_trades_path.c_str());
+            md_fanout = std::make_unique<FanoutProcessMsg>(
+                console_processor,
+                *received_quotes);
+            oe_fanout = std::make_unique<FanoutProcessMsg>(
+                console_processor,
+                *received_trades);
+            md_processor = md_fanout.get();
+            oe_processor = oe_fanout.get();
+        }
+
         //wait for connection
         md_listener.SetReuseAddress();
         md_listener.SetReceiveBufferSize(receive_buffer_size);
-        md_listener.Bind(9001);
+        md_listener.Bind(md_host_.c_str(), md_port_);
         md_listener.Listen();
 
         oe_listener.SetReuseAddress();
         oe_listener.SetReceiveBufferSize(receive_buffer_size);
-        oe_listener.Bind(9002);
+        oe_listener.Bind(oe_host_.c_str(), oe_port_);
         oe_listener.Listen();
 
         utils::Socket md_client = md_listener.Accept();
@@ -104,10 +154,10 @@ namespace slipstream {
            //TODO drainEgress();
 
             if (poll_fds[md_index].revents & POLLIN) {
-                recvMarketEvent(md_client, md_decoder);
+                recvMarketEvent(md_client, md_decoder, *md_processor);
             }
             if (poll_fds[oe_index].revents & POLLIN) {
-                recvMarketEvent(oe_client, oe_decoder);
+                recvMarketEvent(oe_client, oe_decoder, *oe_processor);
             }
 
           //  if (poll_fds[oe_index].revents & POLLOUT) {
@@ -120,10 +170,10 @@ namespace slipstream {
 
     void NetworkManager::recvMarketEvent(
         utils::Socket& client,
-        codec::ServerSideDecoder& decoder) {
+        codec::ServerSideDecoder& decoder,
+        IProcessMsgClass& processor) {
 
         std::array<std::byte, 4096> recv_buffer;
-        ConsoleProcessMsg console_processor{"slipstream"};
 
         while (true) {
             const ::ssize_t recvd = client.Recv(recv_buffer);
@@ -139,7 +189,7 @@ namespace slipstream {
                     //         "failed to enqueue MarketEvent");
                     // }
 
-                    console_processor.Sink(recv_message);
+                    processor.Sink(recv_message);
                 }
 
                 if (result.status == codec::DecodeStatus::error) {

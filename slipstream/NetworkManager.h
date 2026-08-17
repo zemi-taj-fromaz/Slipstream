@@ -8,15 +8,22 @@
 #include "socket.h"
 
 #include <queue>
+#include <string>
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
 #include <unistd.h>
 #include <rigtorp/SPSCQueue.h>
 
+class IProcessMsgClass;
+
 namespace slipstream {
     class NetworkManager {
     public:
-        NetworkManager(){}
+        NetworkManager(
+            std::string md_host,
+            std::uint16_t md_port,
+            std::string oe_host,
+            std::uint16_t oe_port);
         NetworkManager(
             rigtorp::SPSCQueue<MarketEvent>& in,
             rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out);
@@ -44,10 +51,15 @@ namespace slipstream {
 
         void recvMarketEvent(
             utils::Socket& client,
-            codec::ServerSideDecoder& decoder);
+            codec::ServerSideDecoder& decoder,
+            IProcessMsgClass& processor);
 
         utils::Socket md_listener{};
         utils::Socket oe_listener{};
+        std::string md_host_;
+        std::uint16_t md_port_{};
+        std::string oe_host_;
+        std::uint16_t oe_port_{};
         bool alive{true};
 
         rigtorp::SPSCQueue<MarketEvent>* ingress;

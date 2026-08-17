@@ -3,6 +3,9 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -78,6 +81,31 @@ TEST(FanoutProcessMsg, ForwardsToBothProcessors) {
 
     EXPECT_EQ(first.count, 1);
     EXPECT_EQ(second.count, 1);
+}
+
+TEST(CanonicalFileProcessMsg, WritesDeterministicProtocolFields) {
+    const std::filesystem::path output_path =
+        std::filesystem::temp_directory_path() /
+        "slipstream_canonical_message_processor_test.csv";
+
+    {
+        CanonicalFileProcessMsg processor{output_path.c_str()};
+        processor.Sink(QuoteEvent());
+        processor.Sink(TradeEvent());
+    }
+
+    std::ifstream input{output_path};
+    std::ostringstream contents;
+    contents << input.rdbuf();
+
+    EXPECT_EQ(
+        contents.str(),
+        "event_ts_ns,type,symbol,bid_price,bid_qty,ask_price,ask_qty,"
+        "price,qty,aggressor,id\n"
+        "123000000,Q,SYNTH1,1012300,100,1012500,200,,,,\n"
+        "456000000,T,SYNTH1,,,,,1012400,75,?,0\n");
+
+    std::filesystem::remove(output_path);
 }
 
 } // namespace

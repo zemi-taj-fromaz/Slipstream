@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <spdlog/logger.h>
@@ -37,11 +38,11 @@ private:
 
 class NetworkProcessMsg final : public IProcessMsgClass {
 public:
-    NetworkProcessMsg(std::uint16_t port) {
+    NetworkProcessMsg(const char* host, std::uint16_t port) {
         constexpr int send_buffer_size = 1024 * 1024;
         socket_.SetTcpNoDelay();
         socket_.SetSendBufferSize(send_buffer_size);
-        socket_.Connect("127.0.0.1", port);
+        socket_.Connect(host, port);
     }
 
     void Sink(const MarketEvent& event) override {
@@ -70,17 +71,30 @@ int main(int argc, char* argv[]) {
     spdlog::logger logger{"market_data_client", sinks.begin(), sinks.end()};
 
     try {
-        const std::uint64_t start_at_ns =
-            utils::ParseReplayStartNs(argc, argv);
+        const utils::ReplayClientOptions options =
+            utils::ParseReplayClientOptions(argc, argv);
         const auto events = parse_csv(csv_path);
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
-        logger.info("Replay starts at Unix nanoseconds {}", start_at_ns);
+        logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
-        NetworkProcessMsg net_processor{9001};
-        ProcessRowsByTimestamp<EventType::Quote>(
-            events,
-            net_processor,
-            start_at_ns);
+        NetworkProcessMsg net_processor{options.host.c_str(), options.port};
+
+        if (utils::ReplayVerificationEnabled()) {
+            const std::string expected_path =
+                std::string{SLIPSTREAM_VERIFICATION_DIR} +
+                "/expected_quotes.csv";
+            CanonicalFileProcessMsg expected_events{expected_path.c_str()};
+            FanoutProcessMsg processor{expected_events, net_processor};
+            ProcessRowsByTimestamp<EventType::Quote>(
+                events,
+                processor,
+                options.start_at_ns);
+        } else {
+            ProcessRowsByTimestamp<EventType::Quote>(
+                events,
+                net_processor,
+                options.start_at_ns);
+        }
 
         logger.info("Market-data replay complete");
     } catch (const std::exception& error) {

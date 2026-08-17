@@ -27,6 +27,7 @@ namespace utils {
         void SetSendBufferSize(int size);
         void SetTcpNoDelay(bool enabled = true);
         void Bind(std::uint16_t port);
+        void Bind(const char* address, std::uint16_t port);
         void Listen(int backlog = 8); // waits for connection
         [[nodiscard]]
         Socket Accept();
