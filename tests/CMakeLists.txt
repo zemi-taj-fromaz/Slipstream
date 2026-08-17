@@ -2,6 +2,7 @@ include(GoogleTest)
 
 add_executable(csv_parser_tests
     csv_parser_tests.cpp
+        ../slipstream/SlipstreamConfig.h
 )
 
 target_link_libraries(csv_parser_tests

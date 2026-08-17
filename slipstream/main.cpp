@@ -1,10 +1,12 @@
 //
 // Created by babodev on 15.08.2026..
 //
+
+#include "SlipstreamConfig.h"
+
 #include <exception>
 #include <charconv>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -18,64 +20,108 @@
 
 namespace {
 
-struct NetworkOptions {
-    std::string md_host{"127.0.0.1"};
-    std::uint16_t md_port{9001};
-    std::string oe_host{"127.0.0.1"};
-    std::uint16_t oe_port{9002};
-};
+template <typename Number>
+Number ParseNumber(
+    std::string_view text,
+    std::string_view option) {
+    Number value{};
 
-std::uint16_t ParsePort(std::string_view text, std::string_view option) {
-    std::uint32_t value{};
     const auto [end, error] = std::from_chars(
         text.data(),
         text.data() + text.size(),
         value);
 
     if (error != std::errc{} ||
-        end != text.data() + text.size() ||
-        value == 0 ||
-        value > std::numeric_limits<std::uint16_t>::max()) {
+        end != text.data() + text.size()) {
         throw std::invalid_argument(
-            std::string{option} + " must be in [1, 65535]");
+            std::string{option} +
+            " has an invalid numeric value");
     }
 
-    return static_cast<std::uint16_t>(value);
-}
-
-NetworkOptions ParseNetworkOptions(int argc, char* argv[]) {
-    NetworkOptions options;
-
-    for (int index = 1; index < argc; ++index) {
-        const std::string_view option{argv[index]};
-        if (option != "--md-host" &&
-            option != "--md-port" &&
-            option != "--oe-host" &&
-            option != "--oe-port") {
-            continue;
-        }
-
-        if (index + 1 >= argc) {
-            throw std::invalid_argument(
-                std::string{option} + " is missing its value");
-        }
-
-        const std::string_view value{argv[++index]};
-        if (option == "--md-host") {
-            options.md_host = value;
-        } else if (option == "--md-port") {
-            options.md_port = ParsePort(value, option);
-        } else if (option == "--oe-host") {
-            options.oe_host = value;
-        } else {
-            options.oe_port = ParsePort(value, option);
-        }
-    }
-
-    return options;
+    return value;
 }
 
 } // namespace
+
+SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
+
+    SlipstreamConfig config;
+
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view option{argv[index]};
+
+        const auto NextValue = [&]() -> std::string_view {
+            if (index + 1 >= argc) {
+                throw std::invalid_argument(
+                    std::string{option} +
+                    " is missing its value");
+            }
+
+            return argv[++index];
+        };
+
+        if (option == "--symbol") {
+            config.symbol = NextValue();
+
+        } else if (option == "--max-quantity") {
+            config.max_quantity =
+                ParseNumber<std::uint32_t>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--participation-cap") {
+            config.participation_cap =
+                ParseNumber<double>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--vwap-window-ms") {
+            config.vwap_window_ms =
+                ParseNumber<std::uint64_t>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--band-bps") {
+            config.band_bps =
+                ParseNumber<double>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--md-host") {
+            config.md_host = NextValue();
+
+        } else if (option == "--md-port") {
+            config.md_port =
+                ParseNumber<std::uint16_t>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--oe-host") {
+            config.oe_host = NextValue();
+
+        } else if (option == "--oe-port") {
+            config.oe_port =
+                ParseNumber<std::uint16_t>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--transport") {
+            config.transport = NextValue();
+
+        } else {
+            throw std::invalid_argument(
+                "unknown argument: " +
+                std::string{option});
+        }
+    }
+
+    if (config.md_port == 0 || config.oe_port == 0) {
+        throw std::invalid_argument(
+            "MD and OE ports must be greater than zero");
+    }
+
+    return config;
+}
 
 int main(int argc, char* argv[]) {
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
@@ -86,19 +132,13 @@ int main(int argc, char* argv[]) {
     spdlog::logger logger{"slipstream", sinks.begin(), sinks.end()};
 
     try {
-        const NetworkOptions options = ParseNetworkOptions(argc, argv);
-        logger.info(
-            "Listening for MD on {}:{} and OE on {}:{}",
-            options.md_host,
-            options.md_port,
-            options.oe_host,
-            options.oe_port);
+        const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);
 
         slipstream::NetworkManager network_manager{
-            options.md_host,
-            options.md_port,
-            options.oe_host,
-            options.oe_port};
+            slipstream_config.md_host,
+            slipstream_config.md_port,
+            slipstream_config.oe_host,
+            slipstream_config.oe_port};
         network_manager.Process();
         return 0;
     } catch (const std::exception& error) {
