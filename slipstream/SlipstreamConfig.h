@@ -12,7 +12,7 @@ struct SlipstreamConfig {
     std::string symbol{"SYNTH1"};
     std::uint32_t max_quantity{500};
     double participation_cap{0.15};
-    std::uint64_t vwap_window_ms{30'000};
+    std::uint32_t vwap_window_ms{30'000};
     double band_bps{25.5};
 
     std::string md_host{"127.0.0.1"};

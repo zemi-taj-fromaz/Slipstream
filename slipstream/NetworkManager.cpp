@@ -11,29 +11,19 @@
 #include <poll.h>
 #include <string>
 #include <system_error>
-#include <utility>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
 namespace slipstream {
 
-    NetworkManager::NetworkManager(
-        std::string md_host,
-        std::uint16_t md_port,
-        std::string oe_host,
-        std::uint16_t oe_port)
-        : md_host_{std::move(md_host)},
-          md_port_{md_port},
-          oe_host_{std::move(oe_host)},
-          oe_port_{oe_port} {}
+    NetworkManager::NetworkManager(const SlipstreamConfig& config)
+        : config_{config} {}
 
     NetworkManager::NetworkManager(
+        const SlipstreamConfig& config,
         rigtorp::SPSCQueue<MarketEvent>& in,
         rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out)
-        : md_host_{"127.0.0.1"},
-          md_port_{9001},
-          oe_host_{"127.0.0.1"},
-          oe_port_{9002},
+        : config_{config},
           ingress(&in),
           egress(&out) {}
 
@@ -77,12 +67,12 @@ namespace slipstream {
         //wait for connection
         md_listener.SetReuseAddress();
         md_listener.SetReceiveBufferSize(receive_buffer_size);
-        md_listener.Bind(md_host_.c_str(), md_port_);
+        md_listener.Bind(config_.md_host.c_str(), config_.md_port);
         md_listener.Listen();
 
         oe_listener.SetReuseAddress();
         oe_listener.SetReceiveBufferSize(receive_buffer_size);
-        oe_listener.Bind(oe_host_.c_str(), oe_port_);
+        oe_listener.Bind(config_.oe_host.c_str(), config_.oe_port);
         oe_listener.Listen();
 
         utils::Socket md_client = md_listener.Accept();
@@ -184,6 +174,8 @@ namespace slipstream {
                 auto result = decoder.Decode(recv_buffer_span, recv_messages);
 
                 for (auto& recv_message : recv_messages) {
+                    if (std::strcmp(recv_message.symbol, config_.symbol.c_str())) { continue; }
+
                     // if (!ingress.try_push(std::move(recv_message))) {
                     //     throw std::runtime_error(
                     //         "failed to enqueue MarketEvent");

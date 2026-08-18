@@ -5,10 +5,10 @@
 #ifndef SLIPSTREAM_NETWORKMANAGER_H
 #define SLIPSTREAM_NETWORKMANAGER_H
 
+#include "SlipstreamConfig.h"
 #include "socket.h"
 
 #include <queue>
-#include <string>
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
 #include <unistd.h>
@@ -19,12 +19,9 @@ class IProcessMsgClass;
 namespace slipstream {
     class NetworkManager {
     public:
+        explicit NetworkManager(const SlipstreamConfig& config);
         NetworkManager(
-            std::string md_host,
-            std::uint16_t md_port,
-            std::string oe_host,
-            std::uint16_t oe_port);
-        NetworkManager(
+            const SlipstreamConfig& config,
             rigtorp::SPSCQueue<MarketEvent>& in,
             rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out);
         ~NetworkManager();
@@ -56,14 +53,11 @@ namespace slipstream {
 
         utils::Socket md_listener{};
         utils::Socket oe_listener{};
-        std::string md_host_;
-        std::uint16_t md_port_{};
-        std::string oe_host_;
-        std::uint16_t oe_port_{};
+        const SlipstreamConfig& config_;
         bool alive{true};
 
-        rigtorp::SPSCQueue<MarketEvent>* ingress;
-        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>* egress;
+        rigtorp::SPSCQueue<MarketEvent>* ingress{nullptr};
+        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>* egress{nullptr};
 
         codec::ServerSideDecoder md_decoder{};
         codec::ServerSideDecoder oe_decoder{};

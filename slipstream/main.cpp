@@ -77,7 +77,7 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
 
         } else if (option == "--vwap-window-ms") {
             config.vwap_window_ms =
-                ParseNumber<std::uint64_t>(
+                ParseNumber<std::uint32_t>(
                     NextValue(),
                     option);
 
@@ -134,11 +134,7 @@ int main(int argc, char* argv[]) {
     try {
         const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);
 
-        slipstream::NetworkManager network_manager{
-            slipstream_config.md_host,
-            slipstream_config.md_port,
-            slipstream_config.oe_host,
-            slipstream_config.oe_port};
+        slipstream::NetworkManager network_manager{slipstream_config};
         network_manager.Process();
         return 0;
     } catch (const std::exception& error) {
