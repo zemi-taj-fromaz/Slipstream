@@ -8,14 +8,8 @@
 #include "SlipstreamConfig.h"
 #include "TradeManager.h"
 #include "rigtorp/SPSCQueue.h"
+#include "market_event.h"
 
-struct L1Book {
-    std::int64_t bid_price{};
-    std::uint32_t bid_qty{};
-
-    std::int64_t ask_price{};
-    std::uint32_t ask_qty{};
-};
 
 class Engine {
     public:
@@ -23,13 +17,14 @@ class Engine {
         rigtorp::SPSCQueue<MarketEvent>& in,
         rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out);
 
+        void Run();
+
 
     private:
         TradeManager trade_manager;
-        L1Book book;
 
     rigtorp::SPSCQueue<MarketEvent>& ingress;
-        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& egress;
+    rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& egress;
 
 };
 
