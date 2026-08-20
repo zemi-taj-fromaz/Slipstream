@@ -2,6 +2,8 @@ add_executable(slipstream
     main.cpp
     NetworkManager.cpp
     NetworkManager.h
+    VwapWindow.cpp
+    VwapWindow.h
 )
 
 target_link_libraries(slipstream

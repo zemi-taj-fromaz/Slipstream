@@ -7,9 +7,9 @@
 #include <array>
 #include <stdexcept>
 
-TradeManager::TradeManager(const SlipstreamConfig& slipstream) : max_qty(slipstream.max_quantity), participation_cap(slipstream.participation_cap),band_bps(slipstream.band_bps)
+TradeManager::TradeManager(const SlipstreamConfig& slipstream) : vwap_window(slipstream)
 {
-    vwap_window.vwap_window_ms = slipstream.vwap_window_ms;
+
 }
 
 bool TradeManager::Push(MarketEvent& event) {
@@ -61,14 +61,7 @@ bool TradeManager::Push(MarketEvent& event) {
         }
 
         for (std::size_t i = 0; i < inferred_count; ++i) {
-            if (vwap_window.count == capacity) {
-                throw std::runtime_error("Buffer overflow");
-            }
             vwap_window.push(inferred_trades[i]);
-
-            vwap_window.Trades[vwap_window.head] = inferred_trades[i];
-            vwap_window.head = (vwap_window.head + 1) & (capacity - 1);
-            ++vwap_window.count;
         }
 
         *book = L1Book{

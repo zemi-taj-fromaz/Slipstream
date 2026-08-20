@@ -5,6 +5,8 @@ add_executable(csv_parser_tests
         ../slipstream/SlipstreamConfig.h
         ../slipstream/TradeManager.cpp
         ../slipstream/TradeManager.h
+        ../slipstream/VwapWindow.cpp
+        ../slipstream/VwapWindow.h
 )
 
 target_link_libraries(csv_parser_tests
