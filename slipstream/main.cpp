@@ -133,6 +133,7 @@ int main(int argc, char* argv[]) {
         true);
     const std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
     spdlog::logger logger{"slipstream", sinks.begin(), sinks.end()};
+    logger.set_pattern("[%n] %v");
 
     try {
         const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);

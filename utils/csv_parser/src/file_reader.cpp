@@ -100,6 +100,7 @@ std::vector<MarketEvent> FileReader::Parse() const {
 
     std::string_view remaining = data;
     std::size_t row_number = 1;
+    std::int64_t next_trade_id = 1;
 
     while (!remaining.empty()) {
         ++row_number;
@@ -127,7 +128,7 @@ std::vector<MarketEvent> FileReader::Parse() const {
             } else if (fields[1] == "T") {
                 event.payload = Trade{
                     .price = ParsePrice(fields[7], row_number),
-                    .id = 0,
+                    .id = next_trade_id++,
                     .qty = ParseQuantity(fields[8], row_number),
                     .aggressor = '?',
                 };

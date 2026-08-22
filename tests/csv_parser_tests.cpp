@@ -73,6 +73,8 @@ TEST(CsvParser, ParsesQuotesAndTrades) {
     const auto& trade = std::get<Trade>(events[1].payload);
     EXPECT_EQ(trade.price, 2'485'300);
     EXPECT_EQ(trade.qty, 65U);
+    EXPECT_EQ(trade.id, 1);
+    EXPECT_EQ(trade.aggressor, '?');
 }
 
 TEST(CsvParser, AcceptsNanosecondTimestamp) {

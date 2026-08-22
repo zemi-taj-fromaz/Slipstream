@@ -52,13 +52,13 @@ namespace slipstream {
         constexpr int receive_buffer_size = 1024 * 1024;
         constexpr int send_buffer_size = 1024 * 1024;
 
+        IMsgController quiet_controller;
         ConsoleMsgController console_controller{"slipstream"};
-        IMsgController* md_controller = &console_controller;
+        IMsgController* md_controller = &quiet_controller;
         IMsgController* oe_controller = &console_controller;
 
         std::unique_ptr<CanonicalFileMsgController> received_quotes;
         std::unique_ptr<CanonicalFileMsgController> received_trades;
-        std::unique_ptr<FanoutMsgController> md_fanout;
         std::unique_ptr<FanoutMsgController> oe_fanout;
 
         if (utils::ReplayVerificationEnabled()) {
@@ -73,13 +73,10 @@ namespace slipstream {
                 received_quotes_path.c_str());
             received_trades = std::make_unique<CanonicalFileMsgController>(
                 received_trades_path.c_str());
-            md_fanout = std::make_unique<FanoutMsgController>(
-                console_controller,
-                *received_quotes);
+            md_controller = received_quotes.get();
             oe_fanout = std::make_unique<FanoutMsgController>(
                 console_controller,
                 *received_trades);
-            md_controller = md_fanout.get();
             oe_controller = oe_fanout.get();
         }
 

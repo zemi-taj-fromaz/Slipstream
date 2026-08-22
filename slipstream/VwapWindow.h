@@ -30,8 +30,14 @@ enum class TradeResult : std::uint8_t {
     NoOrder,
     MarketTradeRecorded,
     UserTradeAccepted,
-    UserTradeRejected,
+    UserTradeRejectedVwapNotReady,
+    UserTradeRejectedMaxQuantity,
+    UserTradeRejectedParticipationCap,
 };
+
+[[nodiscard]] bool IsUserTradeResult(TradeResult result) noexcept;
+[[nodiscard]] bool IsUserTradeRejected(TradeResult result) noexcept;
+[[nodiscard]] const char* TradeRejectionReason(TradeResult result) noexcept;
 
 class VwapWindow {
 public:
