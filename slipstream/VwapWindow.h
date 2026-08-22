@@ -18,20 +18,35 @@ enum class TradeOrigin : std::uint16_t {
     User
 };
 
+enum class TradeSide : std::uint8_t {
+    Unknown,
+    Buy,
+    Sell,
+};
+
 struct TradePrint {
     __int128_t pq{};
     std::uint64_t ts_ns{};
     std::int64_t price{};
     std::uint32_t qty{};
     TradeOrigin origin{};
+    TradeSide side{TradeSide::Unknown};
 };
 
 enum class TradeResult : std::uint8_t {
     NoOrder,
     MarketTradeRecorded,
     UserTradeAccepted,
+    UserTradeRejectedBand,
     UserTradeRejectedMaxQuantity,
     UserTradeRejectedParticipationCap,
+};
+
+struct TradeDecision {
+    TradeResult result{TradeResult::NoOrder};
+    TradeSide side{TradeSide::Unknown};
+    std::int64_t vwap{};
+    double band_bps{};
 };
 
 [[nodiscard]] bool IsUserTradeResult(TradeResult result) noexcept;
@@ -42,11 +57,11 @@ class VwapWindow {
 public:
     explicit VwapWindow(const SlipstreamConfig& slipstream);
 
-    TradeResult push(TradePrint trade_print);
+    TradeDecision push(TradePrint trade_print);
 
 private:
-    [[nodiscard]] TradeResult checkConstraints(
-        const TradePrint& trade_print);
+    [[nodiscard]] TradeDecision checkConstraints(TradePrint& trade_print);
+    void resolveSide(TradePrint& trade_print) const;
     void evictExpired(std::uint64_t now_ns);
     void insert(const TradePrint& trade_print);
     void recomputeMetrics();
@@ -54,7 +69,7 @@ private:
     double participation_cap;
     std::uint64_t vwap_window_ns;
     std::uint32_t max_qty;
-    std::uint32_t band_bps;
+    std::uint64_t band_bps_units;
 
     std::array<TradePrint, vwap_capacity> trades{};
 

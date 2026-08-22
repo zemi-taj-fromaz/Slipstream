@@ -11,6 +11,11 @@
 
 
 namespace utils {
+    enum class ConnectionResult : std::uint8_t {
+        Complete,
+        PeerDisconnected
+    };
+
     class Socket {
     public:
         Socket();
@@ -35,7 +40,7 @@ namespace utils {
         void Connect(const char* address, std::uint16_t port);
 
         ssize_t Recv(std::span<std::byte> buffer);
-        void SendAll(std::span<const std::byte> bytes);
+        ConnectionResult SendAll(std::span<const std::byte> bytes);
         void Shutdown(int how);
 
         [[nodiscard]]

@@ -46,13 +46,18 @@ Engine::Engine(const SlipstreamConfig& slipstream,
 void Engine::Run() {
     while (running.load(std::memory_order_relaxed)) {
         if (MarketEvent* event = ingress.front()) {
-            const TradeResult result = trade_manager.Push(*event);
+            const TradeDecision decision = trade_manager.Push(*event);
+            const TradeResult result = decision.result;
 
             if (IsUserTradeResult(result)) {
                 const auto* trade = std::get_if<Trade>(&event->payload);
                 if (trade == nullptr) {
                     throw std::logic_error(
                         "user trade result produced for a non-trade event");
+                }
+                if (decision.side == TradeSide::Unknown) {
+                    throw std::logic_error(
+                        "user trade decision has unknown side");
                 }
 
                 if (IsUserTradeRejected(result)) {
@@ -65,6 +70,8 @@ void Engine::Run() {
                             sizeof(event->symbol))
                         << " qty=" << trade->qty
                         << " price=" << trade->price
+                        << " vwap=" << decision.vwap
+                        << " band_bps=" << decision.band_bps
                         << '\n'
                         << std::flush;
                 }
@@ -77,7 +84,7 @@ void Engine::Run() {
                     .ts_ns = event->ts,
                     .trade_id = trade->id,
 
-                    .side = trade->aggressor == 'S'
+                    .side = decision.side == TradeSide::Sell
                         ? slipstream::codec::OrderSide::sell
                         : slipstream::codec::OrderSide::buy,
                     .qty = trade->qty,

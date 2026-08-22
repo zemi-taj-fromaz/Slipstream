@@ -4,10 +4,27 @@
 
 #include "VwapWindow.h"
 
+#include <cmath>
 #include <stdexcept>
 
 namespace {
 constexpr std::uint64_t nanoseconds_per_millisecond = 1'000'000ULL;
+constexpr std::uint64_t band_bps_precision = 1'000ULL;
+constexpr std::uint64_t basis_points_per_unit = 10'000ULL;
+constexpr std::uint64_t band_denominator =
+    basis_points_per_unit * band_bps_precision;
+
+std::uint64_t ScaleBandBps(const double band_bps) {
+    if (!std::isfinite(band_bps) ||
+        band_bps < 0.0 ||
+        band_bps > static_cast<double>(basis_points_per_unit)) {
+        throw std::invalid_argument(
+            "band_bps must be a finite value in [0, 10000]");
+    }
+
+    return static_cast<std::uint64_t>(
+        std::llround(band_bps * band_bps_precision));
+}
 }
 
 bool IsUserTradeResult(const TradeResult result) noexcept {
@@ -16,12 +33,15 @@ bool IsUserTradeResult(const TradeResult result) noexcept {
 }
 
 bool IsUserTradeRejected(const TradeResult result) noexcept {
-    return result == TradeResult::UserTradeRejectedMaxQuantity ||
+    return result == TradeResult::UserTradeRejectedBand ||
+           result == TradeResult::UserTradeRejectedMaxQuantity ||
            result == TradeResult::UserTradeRejectedParticipationCap;
 }
 
 const char* TradeRejectionReason(const TradeResult result) noexcept {
     switch (result) {
+    case TradeResult::UserTradeRejectedBand:
+        return "band_bps";
     case TradeResult::UserTradeRejectedMaxQuantity:
         return "max_quantity";
     case TradeResult::UserTradeRejectedParticipationCap:
@@ -41,23 +61,24 @@ VwapWindow::VwapWindow(const SlipstreamConfig& slipstream)
           static_cast<std::uint64_t>(slipstream.vwap_window_ms) *
           nanoseconds_per_millisecond),
       max_qty(slipstream.max_quantity),
-      band_bps(slipstream.band_bps) {
+      band_bps_units(ScaleBandBps(slipstream.band_bps)) {
 }
 
-TradeResult VwapWindow::push(TradePrint trade_print) {
+TradeDecision VwapWindow::push(TradePrint trade_print) {
     evictExpired(trade_print.ts_ns);
 
-    const TradeResult result = checkConstraints(trade_print);
-    if (result == TradeResult::NoOrder || IsUserTradeRejected(result)) {
-        return result;
+    const TradeDecision decision = checkConstraints(trade_print);
+    if (decision.result == TradeResult::NoOrder ||
+        IsUserTradeRejected(decision.result)) {
+        return decision;
     }
 
     insert(trade_print);
     recomputeMetrics();
-    return result;
+    return decision;
 }
 
-TradeResult VwapWindow::checkConstraints(const TradePrint& trade_print) {
+TradeDecision VwapWindow::checkConstraints(TradePrint& trade_print) {
     if (trade_print.origin == TradeOrigin::Market) {
         if (!warmup_gate_passed) {
             if (observedQuotes == 0) {
@@ -75,15 +96,63 @@ TradeResult VwapWindow::checkConstraints(const TradePrint& trade_print) {
             }
         }
 
-        return TradeResult::MarketTradeRecorded;
+        return {
+            TradeResult::MarketTradeRecorded,
+            trade_print.side,
+        };
     }
 
     if (!warmup_gate_passed || count < 10) {
-        return TradeResult::NoOrder;
+        return {
+            TradeResult::NoOrder,
+            trade_print.side,
+        };
+    }
+
+    resolveSide(trade_print);
+
+    const __int128_t scaled_trade_price =
+        static_cast<__int128_t>(trade_print.price) *
+        band_denominator;
+
+    bool band_crossed = false;
+
+    switch (trade_print.side) {
+    case TradeSide::Buy:
+        band_crossed =
+            scaled_trade_price <=
+            rolling_vwap *
+                (band_denominator - band_bps_units);
+        break;
+    case TradeSide::Sell:
+        band_crossed =
+            scaled_trade_price >=
+            rolling_vwap *
+                (band_denominator + band_bps_units);
+        break;
+    case TradeSide::Unknown:
+        throw std::logic_error(
+            "user trade side was not resolved");
+    }
+
+    if (!band_crossed) {
+        return {
+            TradeResult::UserTradeRejectedBand,
+            trade_print.side,
+            static_cast<std::int64_t>(rolling_vwap),
+            static_cast<double>(band_bps_units) /
+                band_bps_precision,
+        };
     }
 
     if (trade_print.qty > max_qty) {
-        return TradeResult::UserTradeRejectedMaxQuantity;
+        return {
+            TradeResult::UserTradeRejectedMaxQuantity,
+            trade_print.side,
+            static_cast<std::int64_t>(rolling_vwap),
+            static_cast<double>(band_bps_units) /
+                band_bps_precision,
+        };
     }
 
     const auto quantity_after_trade =
@@ -95,9 +164,25 @@ TradeResult VwapWindow::checkConstraints(const TradePrint& trade_print) {
         static_cast<double>(user_quantity_after_trade) /
         static_cast<double>(quantity_after_trade);
 
-    return participation_after_trade <= participation_cap
-        ? TradeResult::UserTradeAccepted
-        : TradeResult::UserTradeRejectedParticipationCap;
+    return {
+        participation_after_trade <= participation_cap
+            ? TradeResult::UserTradeAccepted
+            : TradeResult::UserTradeRejectedParticipationCap,
+        trade_print.side,
+        static_cast<std::int64_t>(rolling_vwap),
+        static_cast<double>(band_bps_units) /
+            band_bps_precision,
+    };
+}
+
+void VwapWindow::resolveSide(TradePrint& trade_print) const {
+    if (trade_print.side != TradeSide::Unknown) {
+        return;
+    }
+
+    trade_print.side = trade_print.price <= rolling_vwap
+        ? TradeSide::Buy
+        : TradeSide::Sell;
 }
 
 void VwapWindow::evictExpired(const std::uint64_t now_ns) {

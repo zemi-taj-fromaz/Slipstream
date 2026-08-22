@@ -10,7 +10,7 @@ class MDMsgController final : public IMsgController {
 public:
     MDMsgController(const char* host, std::uint16_t port);
 
-    void Send(const MarketEvent& event) override;
+    utils::ConnectionResult Send(const MarketEvent& event) override;
 
 private:
     utils::Socket socket_;

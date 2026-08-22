@@ -48,18 +48,16 @@ namespace slipstream {
         }
     }
 
-    void NetworkManager::Process() {
+    void NetworkManager::Run() {
         constexpr int receive_buffer_size = 1024 * 1024;
         constexpr int send_buffer_size = 1024 * 1024;
 
         IMsgController quiet_controller;
-        ConsoleMsgController console_controller{"slipstream"};
         IMsgController* md_controller = &quiet_controller;
-        IMsgController* oe_controller = &console_controller;
+        IMsgController* oe_controller = &quiet_controller;
 
         std::unique_ptr<CanonicalFileMsgController> received_quotes;
         std::unique_ptr<CanonicalFileMsgController> received_trades;
-        std::unique_ptr<FanoutMsgController> oe_fanout;
 
         if (utils::ReplayVerificationEnabled()) {
             const std::string received_quotes_path =
@@ -74,10 +72,7 @@ namespace slipstream {
             received_trades = std::make_unique<CanonicalFileMsgController>(
                 received_trades_path.c_str());
             md_controller = received_quotes.get();
-            oe_fanout = std::make_unique<FanoutMsgController>(
-                console_controller,
-                *received_trades);
-            oe_controller = oe_fanout.get();
+            oe_controller = received_trades.get();
         }
 
         //wait for connection
@@ -288,7 +283,11 @@ namespace slipstream {
     void NetworkManager::flushSendQueue(utils::Socket& oe_client) {
         while (!send_queue.empty()) {
             EncodedFrame& frame = send_queue.front();
-            oe_client.SendAll(frame.remainingBytes());
+            if (oe_client.SendAll(frame.remainingBytes()) ==
+                utils::ConnectionResult::PeerDisconnected) {
+                alive = false;
+                return;
+            }
             send_queue.pop_front();
         }
     }

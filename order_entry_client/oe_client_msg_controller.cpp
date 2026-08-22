@@ -30,20 +30,20 @@ OEClientMsgController::OEClientMsgController(
     poll_descriptor_.fd = socket_.NativeHandle();
 }
 
-void OEClientMsgController::Send(const MarketEvent& event) {
+utils::ConnectionResult OEClientMsgController::Send(const MarketEvent& event) {
     std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
     const std::size_t encoded_size =
         slipstream::codec::EncodeMarketEvent(event, buffer);
 
-    socket_.SendAll({buffer.data(), encoded_size});
+    return socket_.SendAll({buffer.data(), encoded_size});
 }
 
-void OEClientMsgController::ProcessInboundUntil(
+utils::ConnectionResult OEClientMsgController::ProcessInboundUntil(
     std::chrono::steady_clock::time_point deadline) {
     while (true) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {
-            return;
+            return utils::ConnectionResult::Complete;
         }
 
         const auto timeout_ms =
@@ -70,14 +70,21 @@ void OEClientMsgController::ProcessInboundUntil(
         }
 
         if (ready == 0) {
-            return;
+            return utils::ConnectionResult::Complete;
         }
 
         if (poll_descriptor_.revents & POLLIN) {
-            ReceiveAvailable();
+            const utils::ConnectionResult result = ReceiveAvailable();
+            if (result == utils::ConnectionResult::PeerDisconnected) {
+                return result;
+            }
         }
 
-        if (poll_descriptor_.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        if (poll_descriptor_.revents & POLLHUP) {
+            return utils::ConnectionResult::PeerDisconnected;
+        }
+
+        if (poll_descriptor_.revents & (POLLERR | POLLNVAL)) {
             throw std::runtime_error(
                 "OE socket error while waiting for server response");
         }
@@ -92,7 +99,7 @@ std::string OEClientMsgController::Symbol(const char (&symbol)[12]) {
     return {symbol, length};
 }
 
-void OEClientMsgController::ReceiveAvailable() {
+utils::ConnectionResult OEClientMsgController::ReceiveAvailable() {
     std::array<std::byte, 4096> buffer{};
 
     while (true) {
@@ -116,7 +123,7 @@ void OEClientMsgController::ReceiveAvailable() {
         }
 
         if (recvd == 0) {
-            throw std::runtime_error("server closed OE connection");
+            return utils::ConnectionResult::PeerDisconnected;
         }
 
         if (errno == EINTR) {
@@ -124,7 +131,11 @@ void OEClientMsgController::ReceiveAvailable() {
         }
 
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return;
+            return utils::ConnectionResult::Complete;
+        }
+
+        if (errno == ECONNRESET || errno == ENOTCONN) {
+            return utils::ConnectionResult::PeerDisconnected;
         }
 
         throw std::system_error(

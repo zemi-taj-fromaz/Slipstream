@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
 
         std::jthread network_thread{[&] {
             try {
-                network_manager.Process();
+                network_manager.Run();
             } catch (...) {
                 network_error = std::current_exception();
             }

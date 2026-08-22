@@ -17,6 +17,23 @@ target_link_libraries(csv_parser_tests
 
 gtest_discover_tests(csv_parser_tests)
 
+add_executable(vwap_window_tests
+    vwap_window_tests.cpp
+    ../slipstream/VwapWindow.cpp
+)
+
+target_include_directories(vwap_window_tests
+    PRIVATE
+        ../slipstream
+)
+
+target_link_libraries(vwap_window_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+gtest_discover_tests(vwap_window_tests)
+
 add_executable(message_processor_tests
     message_processor_tests.cpp
 )

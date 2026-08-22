@@ -128,7 +128,7 @@ namespace utils {
         return ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
     };
 
-    void Socket::SendAll(std::span<const std::byte> bytes) {
+    ConnectionResult Socket::SendAll(std::span<const std::byte> bytes) {
 
         std::size_t offset{};
 
@@ -141,7 +141,7 @@ namespace utils {
             }
 
             if (sent == 0) {
-                throw std::runtime_error("send() failed");
+                return ConnectionResult::PeerDisconnected;
             }
 
             if (errno == EINTR) {
@@ -153,11 +153,19 @@ namespace utils {
                 continue; // Deliberately busy-spin until send-buffer space exists.
             }
 
+            if (errno == EPIPE ||
+                errno == ECONNRESET ||
+                errno == ENOTCONN) {
+                return ConnectionResult::PeerDisconnected;
+            }
+
             throw std::system_error(
                 errno,
                 std::generic_category(),
                 "send failed");
         }
+
+        return ConnectionResult::Complete;
     }
 
 

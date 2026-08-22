@@ -34,7 +34,7 @@ namespace slipstream {
         NetworkManager(NetworkManager&&) = delete;
         NetworkManager& operator=(NetworkManager&&) = delete;
 
-        void Process();
+        void Run();
         void SignalEvent();
     private:
 

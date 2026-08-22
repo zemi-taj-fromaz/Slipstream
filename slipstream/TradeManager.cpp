@@ -7,12 +7,29 @@
 #include <array>
 #include <stdexcept>
 
+namespace {
+
+TradeSide ToTradeSide(const char aggressor) {
+    switch (aggressor) {
+    case 'B':
+        return TradeSide::Buy;
+    case 'S':
+        return TradeSide::Sell;
+    case '?':
+        return TradeSide::Unknown;
+    default:
+        throw std::runtime_error("invalid trade aggressor");
+    }
+}
+
+}
+
 TradeManager::TradeManager(const SlipstreamConfig& slipstream) : vwap_window(slipstream)
 {
 
 }
 
-TradeResult TradeManager::Push(MarketEvent& event) {
+TradeDecision TradeManager::Push(MarketEvent& event) {
     if (auto* quote = std::get_if<Quote>(&event.payload)) {
         if (!book) {
             book = std::make_unique<L1Book>(L1Book{
@@ -21,7 +38,10 @@ TradeResult TradeManager::Push(MarketEvent& event) {
                 .ask_price = quote->ask_price,
                 .ask_qty = quote->ask_qty,
             });
-            return TradeResult::NoOrder;
+            return {
+                TradeResult::NoOrder,
+                TradeSide::Unknown,
+            };
         }
 
         std::array<TradePrint, 2> inferred_trades{};
@@ -73,8 +93,14 @@ TradeResult TradeManager::Push(MarketEvent& event) {
 
         //update vwap
         return inferred_count != 0
-            ? TradeResult::MarketTradeRecorded
-            : TradeResult::NoOrder;
+            ? TradeDecision{
+                TradeResult::MarketTradeRecorded,
+                TradeSide::Unknown,
+            }
+            : TradeDecision{
+                TradeResult::NoOrder,
+                TradeSide::Unknown,
+            };
     }
     else if (auto* trade = std::get_if<Trade>(&event.payload)) {
         (void)trade;
@@ -85,8 +111,12 @@ TradeResult TradeManager::Push(MarketEvent& event) {
                 .price = trade->price,
                 .qty = trade->qty,
                 .origin = TradeOrigin::User,
+                .side = ToTradeSide(trade->aggressor),
             });
     }
 
-    return TradeResult::NoOrder;
+    return {
+        TradeResult::NoOrder,
+        TradeSide::Unknown,
+    };
 }

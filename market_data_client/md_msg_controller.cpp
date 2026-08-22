@@ -12,10 +12,10 @@ MDMsgController::MDMsgController(const char* host, std::uint16_t port) {
     socket_.Connect(host, port);
 }
 
-void MDMsgController::Send(const MarketEvent& event) {
+utils::ConnectionResult MDMsgController::Send(const MarketEvent& event) {
     std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
     const std::size_t encoded_size =
         slipstream::codec::EncodeMarketEvent(event, buffer);
 
-    socket_.SendAll({buffer.data(), encoded_size});
+    return socket_.SendAll({buffer.data(), encoded_size});
 }

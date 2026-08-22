@@ -19,14 +19,14 @@ public:
         std::uint16_t port,
         spdlog::logger& logger);
 
-    void Send(const MarketEvent& event) override;
-    void ProcessInboundUntil(
+    utils::ConnectionResult Send(const MarketEvent& event) override;
+    utils::ConnectionResult ProcessInboundUntil(
         std::chrono::steady_clock::time_point deadline) override;
 
 private:
     [[nodiscard]] static std::string Symbol(const char (&symbol)[12]);
 
-    void ReceiveAvailable();
+    utils::ConnectionResult ReceiveAvailable();
     void HandleMessage(
         const slipstream::codec::OrderEntryClientMessage& message);
 

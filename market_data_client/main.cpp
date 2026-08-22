@@ -32,21 +32,27 @@ int main(int argc, char* argv[]) {
 
         MDMsgController md_controller{options.host.c_str(), options.port};
 
+        utils::ConnectionResult replay_result{};
         if (utils::ReplayVerificationEnabled()) {
             const std::string expected_path =
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/expected_quotes.csv";
             CanonicalFileMsgController expected_events{expected_path.c_str()};
             FanoutMsgController controller{expected_events, md_controller};
-            ProcessRowsByTimestamp<EventType::Quote>(
+            replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
                 controller,
                 options.start_at_ns);
         } else {
-            ProcessRowsByTimestamp<EventType::Quote>(
+            replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
                 md_controller,
                 options.start_at_ns);
+        }
+
+        if (replay_result == utils::ConnectionResult::PeerDisconnected) {
+            logger.info("Server closed the market-data connection");
+            return 0;
         }
 
         logger.info("Market-data replay complete");

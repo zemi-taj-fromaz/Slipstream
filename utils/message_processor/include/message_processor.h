@@ -2,6 +2,7 @@
 #define SLIPSTREAM_MESSAGE_PROCESSOR_H
 
 #include "market_event.h"
+#include "socket.h"
 
 #include <chrono>
 #include <cstdint>
@@ -17,8 +18,8 @@ public:
     virtual ~IMsgController() = default;
 
     virtual void Sink(const MarketEvent& event);
-    virtual void Send(const MarketEvent& event);
-    virtual void ProcessInboundUntil(
+    virtual utils::ConnectionResult Send(const MarketEvent& event);
+    virtual utils::ConnectionResult ProcessInboundUntil(
         std::chrono::steady_clock::time_point deadline);
 };
 
@@ -50,7 +51,7 @@ public:
         IMsgController& second);
 
     void Sink(const MarketEvent& event) override;
-    void Send(const MarketEvent& event) override;
+    utils::ConnectionResult Send(const MarketEvent& event) override;
 
 private:
     IMsgController& first_;
@@ -63,12 +64,12 @@ enum class EventType {
 };
 
 template <EventType event_type>
-void ProcessRowsByTimestamp(
+utils::ConnectionResult ProcessRowsByTimestamp(
     const std::vector<MarketEvent>& rows,
     IMsgController& controller,
     std::uint64_t start_at_ns) {
     if (rows.empty()) {
-        return;
+        return utils::ConnectionResult::Complete;
     }
 
     const auto system_now = std::chrono::system_clock::now();
@@ -112,13 +113,21 @@ void ProcessRowsByTimestamp(
             static_cast<std::chrono::nanoseconds::rep>(timestamp_delta)};
 
         if constexpr (event_type == EventType::Trade) {
-            controller.ProcessInboundUntil(send_at);
+            if (controller.ProcessInboundUntil(send_at) ==
+                utils::ConnectionResult::PeerDisconnected) {
+                return utils::ConnectionResult::PeerDisconnected;
+            }
         } else {
             std::this_thread::sleep_until(send_at);
         }
 
-        controller.Send(row);
+        if (controller.Send(row) ==
+            utils::ConnectionResult::PeerDisconnected) {
+            return utils::ConnectionResult::PeerDisconnected;
+        }
     }
+
+    return utils::ConnectionResult::Complete;
 }
 
 #endif // SLIPSTREAM_MESSAGE_PROCESSOR_H

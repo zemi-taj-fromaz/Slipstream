@@ -40,25 +40,37 @@ int main(int argc, char* argv[]) {
             options.port,
             logger};
 
+        utils::ConnectionResult replay_result{};
         if (utils::ReplayVerificationEnabled()) {
             const std::string expected_path =
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/expected_trades.csv";
             CanonicalFileMsgController expected_events{expected_path.c_str()};
             FanoutMsgController controller{expected_events, oe_controller};
-            ProcessRowsByTimestamp<EventType::Trade>(
+            replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
                 controller,
                 options.start_at_ns);
         } else {
-            ProcessRowsByTimestamp<EventType::Trade>(
+            replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
                 oe_controller,
                 options.start_at_ns);
         }
 
-        oe_controller.ProcessInboundUntil(
+        if (replay_result == utils::ConnectionResult::PeerDisconnected) {
+            logger.info("Server closed the order-entry connection");
+            return 0;
+        }
+
+        const utils::ConnectionResult final_result =
+            oe_controller.ProcessInboundUntil(
             std::chrono::steady_clock::now() + final_response_grace);
+
+        if (final_result == utils::ConnectionResult::PeerDisconnected) {
+            logger.info("Server closed the order-entry connection");
+            return 0;
+        }
 
         logger.info("Order-entry replay complete");
     } catch (const std::exception& error) {
