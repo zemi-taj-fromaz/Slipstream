@@ -14,21 +14,39 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <cstring>
+#include <type_traits>
+#include <variant>
+#include <spdlog/spdlog.h>
 
 namespace slipstream {
 
     NetworkManager::NetworkManager(const SlipstreamConfig& config)
-        : config_{config} {}
+        : config_{config},
+          wake_fd{::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)} {
+        if (wake_fd == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "eventfd() failed");
+        }
+    }
 
     NetworkManager::NetworkManager(
         const SlipstreamConfig& config,
         rigtorp::SPSCQueue<MarketEvent>& in,
-        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out)
-        : config_{config},
-          ingress(&in),
-          egress(&out) {}
+        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out,
+        std::atomic<std::uint64_t>& generation)
+        : NetworkManager(config) {
+        ingress = &in;
+        egress = &out;
+        ingress_generation = &generation;
+    }
 
-    NetworkManager::~NetworkManager() {}
+    NetworkManager::~NetworkManager() {
+        if (wake_fd != -1) {
+            ::close(wake_fd);
+        }
+    }
 
     void NetworkManager::Process() {
         constexpr int receive_buffer_size = 1024 * 1024;
@@ -81,18 +99,12 @@ namespace slipstream {
         oe_client.SetTcpNoDelay();
         oe_client.SetSendBufferSize(send_buffer_size);
 
+        markOeActivity();
+
         std::size_t md_index = 0;
         std::size_t oe_index = 1;
         std::size_t wake_index = 2;
 
-
-        wake_fd = ::eventfd(
-            0,
-            EFD_NONBLOCK | EFD_CLOEXEC);
-
-        if (wake_fd == -1) {
-            throw std::runtime_error("eventfd() failed");
-        }
 
         std::array<pollfd, 3> poll_fds{{
             {
@@ -121,6 +133,7 @@ namespace slipstream {
 
             poll_fds[md_index].revents = 0;
             poll_fds[oe_index].revents = 0;
+            poll_fds[wake_index].revents = 0;
 
             constexpr std::int32_t poll_timeout_ms = 1000;
             const int ready = ::poll(poll_fds.data(), static_cast<nfds_t>(poll_fds.size()), poll_timeout_ms);
@@ -135,14 +148,10 @@ namespace slipstream {
                     std::generic_category(),
                     "poll() failed");
             }
-            if (ready == 0) {
-                continue;
-            }
             if (poll_fds[wake_index].revents & POLLIN) {
                 resetWakeNotif();
+                drainEgress();
             }
-
-           //TODO drainEgress();
 
             if (poll_fds[md_index].revents & POLLIN) {
                 recvMarketEvent(md_client, md_decoder, *md_processor);
@@ -151,11 +160,11 @@ namespace slipstream {
                 recvMarketEvent(oe_client, oe_decoder, *oe_processor);
             }
 
-          //  if (poll_fds[oe_index].revents & POLLOUT) {
-           //     flushSendQueue();
-           // }
+            if (poll_fds[oe_index].revents & POLLOUT) {
+                flushSendQueue(oe_client);
+            }
 
-            //TODO check heartbeat
+            checkHeartbeat();
         }
     }
 
@@ -177,10 +186,21 @@ namespace slipstream {
                 for (auto& recv_message : recv_messages) {
                     if (std::strcmp(recv_message.symbol, config_.symbol.c_str())) { continue; }
 
-                    // if (!ingress.try_push(std::move(recv_message))) {
-                    //     throw std::runtime_error(
-                    //         "failed to enqueue MarketEvent");
-                    // }
+                    if (std::holds_alternative<Trade>(recv_message.payload)) {
+                        markOeActivity();
+                    }
+
+                    if (ingress != nullptr) {
+                        if (!ingress->try_push(recv_message)) {
+                            throw std::runtime_error(
+                                "failed to enqueue MarketEvent");
+                        }
+
+                        ingress_generation->fetch_add(
+                            1,
+                            std::memory_order_release);
+                        ingress_generation->notify_one();
+                    }
 
                     processor.Sink(recv_message);
                 }
@@ -213,6 +233,114 @@ namespace slipstream {
                 std::generic_category(),
                 "market-data recv() failed");
         }
+    }
+
+    void NetworkManager::SignalEvent() {
+        const std::uint64_t signal = 1;
+
+        while (true) {
+            const ::ssize_t result = ::write(
+                wake_fd,
+                &signal,
+                sizeof(signal));
+
+            if (result == sizeof(signal)) {
+                return;
+            }
+            if (result == -1 && errno == EINTR) {
+                continue;
+            }
+            if (result == -1 && errno == EAGAIN) {
+                return;
+            }
+
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "failed to signal eventfd");
+        }
+    }
+
+    void NetworkManager::drainEgress() {
+        if (egress == nullptr) {
+            return;
+        }
+
+        while (const auto* message = egress->front()) {
+            EncodedFrame frame{};
+
+            std::visit(
+                [&frame](const auto& value) {
+                    using Message = std::decay_t<decltype(value)>;
+
+                    if constexpr (std::is_same_v<Message, codec::NewOrderMessage>) {
+                        frame.size = codec::EncodeNewOrder(value, frame.bytes);
+                    } else if constexpr (std::is_same_v<Message, codec::HeartbeatMessage>) {
+                        frame.size = codec::EncodeHeartbeat(value, frame.bytes);
+                    } else if constexpr (std::is_same_v<Message, codec::SessionControlMessage>) {
+                        frame.size = codec::EncodeSessionControl(value, frame.bytes);
+                    }
+                },
+                *message);
+
+            send_queue.push_back(std::move(frame));
+            egress->pop();
+        }
+    }
+
+    void NetworkManager::flushSendQueue(utils::Socket& oe_client) {
+        while (!send_queue.empty()) {
+            EncodedFrame& frame = send_queue.front();
+            oe_client.SendAll(frame.remainingBytes());
+            send_queue.pop_front();
+        }
+    }
+
+    void NetworkManager::markOeActivity() {
+        last_oe_activity = std::chrono::steady_clock::now();
+        next_heartbeat = last_oe_activity + heartbeat_interval;
+    }
+
+    void NetworkManager::checkHeartbeat() {
+        if (!alive) {
+            return;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        if (now < next_heartbeat) {
+            return;
+        }
+
+        const auto silent_seconds =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                now - last_oe_activity)
+                .count();
+
+        spdlog::warn(
+            "OE client has been silent for {} seconds; sending heartbeat",
+            silent_seconds);
+
+        queueHeartbeat();
+        next_heartbeat = now + heartbeat_interval;
+    }
+
+    void NetworkManager::queueHeartbeat() {
+        const auto unix_time =
+            std::chrono::system_clock::now().time_since_epoch();
+        const auto timestamp_ns =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                unix_time)
+                .count();
+
+        const codec::HeartbeatMessage heartbeat{
+            .ts_ns = static_cast<std::uint64_t>(timestamp_ns),
+        };
+
+        EncodedFrame frame{};
+        frame.size = codec::EncodeHeartbeat(
+            heartbeat,
+            frame.bytes);
+        send_queue.push_back(std::move(frame));
     }
 
 

@@ -13,12 +13,15 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 
 class Engine {
     public:
     Engine(const SlipstreamConfig& slipstream,
         rigtorp::SPSCQueue<MarketEvent>& in,
-        rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& out);
+        rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& out,
+        std::atomic<std::uint64_t>& ingress_generation,
+        std::function<void()> notify_egress);
 
         void Run();
         void Stop() noexcept;
@@ -29,6 +32,8 @@ class Engine {
 
         rigtorp::SPSCQueue<MarketEvent>& ingress;
         rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& egress;
+        std::atomic<std::uint64_t>& ingress_generation;
+        std::function<void()> notify_egress;
 
         std::atomic_bool running{true};
         std::uint64_t next_client_order_id{1};

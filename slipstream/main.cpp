@@ -141,15 +141,21 @@ int main(int argc, char* argv[]) {
         rigtorp::SPSCQueue<MarketEvent> ingress{queue_capacity};
         rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage> egress{
             queue_capacity};
+        std::atomic<std::uint64_t> ingress_generation{0};
 
         slipstream::NetworkManager network_manager{
             slipstream_config,
             ingress,
-            egress};
+            egress,
+            ingress_generation};
         Engine engine{
             slipstream_config,
             ingress,
-            egress};
+            egress,
+            ingress_generation,
+            [&network_manager] {
+                network_manager.SignalEvent();
+            }};
 
         std::exception_ptr network_error;
         std::exception_ptr engine_error;

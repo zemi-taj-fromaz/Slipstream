@@ -9,6 +9,8 @@
 #include "socket.h"
 
 #include <queue>
+#include <atomic>
+#include <chrono>
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
 #include <unistd.h>
@@ -23,7 +25,8 @@ namespace slipstream {
         NetworkManager(
             const SlipstreamConfig& config,
             rigtorp::SPSCQueue<MarketEvent>& in,
-            rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out);
+            rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out,
+            std::atomic<std::uint64_t>& ingress_generation);
         ~NetworkManager();
 
         NetworkManager(const NetworkManager&) = delete;
@@ -32,19 +35,15 @@ namespace slipstream {
         NetworkManager& operator=(NetworkManager&&) = delete;
 
         void Process();
-        void SignalEvent() {
-            const std::uint64_t signal = 1;
-            if (wake_fd == -1) {
-                throw std::runtime_error("eventfd() failed");
-            }
-            ::write(
-                wake_fd,
-                &signal,
-                sizeof(signal));
-        }
+        void SignalEvent();
     private:
 
         void resetWakeNotif();
+        void drainEgress();
+        void flushSendQueue(utils::Socket& oe_client);
+        void markOeActivity();
+        void checkHeartbeat();
+        void queueHeartbeat();
 
         void recvMarketEvent(
             utils::Socket& client,
@@ -58,12 +57,18 @@ namespace slipstream {
 
         rigtorp::SPSCQueue<MarketEvent>* ingress{nullptr};
         rigtorp::SPSCQueue<codec::OrderEntryClientMessage>* egress{nullptr};
+        std::atomic<std::uint64_t>* ingress_generation{nullptr};
 
         codec::ServerSideDecoder md_decoder{};
         codec::ServerSideDecoder oe_decoder{};
 
         std::deque<EncodedFrame> send_queue;
         int wake_fd{-1};
+
+        std::chrono::steady_clock::time_point last_oe_activity{};
+        std::chrono::steady_clock::time_point next_heartbeat{};
+        static constexpr auto heartbeat_interval =
+            std::chrono::seconds{5};
     };
 }
 
