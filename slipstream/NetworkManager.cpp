@@ -52,14 +52,14 @@ namespace slipstream {
         constexpr int receive_buffer_size = 1024 * 1024;
         constexpr int send_buffer_size = 1024 * 1024;
 
-        ConsoleProcessMsg console_processor{"slipstream"};
-        IProcessMsgClass* md_processor = &console_processor;
-        IProcessMsgClass* oe_processor = &console_processor;
+        ConsoleMsgController console_controller{"slipstream"};
+        IMsgController* md_controller = &console_controller;
+        IMsgController* oe_controller = &console_controller;
 
-        std::unique_ptr<CanonicalFileProcessMsg> received_quotes;
-        std::unique_ptr<CanonicalFileProcessMsg> received_trades;
-        std::unique_ptr<FanoutProcessMsg> md_fanout;
-        std::unique_ptr<FanoutProcessMsg> oe_fanout;
+        std::unique_ptr<CanonicalFileMsgController> received_quotes;
+        std::unique_ptr<CanonicalFileMsgController> received_trades;
+        std::unique_ptr<FanoutMsgController> md_fanout;
+        std::unique_ptr<FanoutMsgController> oe_fanout;
 
         if (utils::ReplayVerificationEnabled()) {
             const std::string received_quotes_path =
@@ -69,18 +69,18 @@ namespace slipstream {
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/received_trades.csv";
 
-            received_quotes = std::make_unique<CanonicalFileProcessMsg>(
+            received_quotes = std::make_unique<CanonicalFileMsgController>(
                 received_quotes_path.c_str());
-            received_trades = std::make_unique<CanonicalFileProcessMsg>(
+            received_trades = std::make_unique<CanonicalFileMsgController>(
                 received_trades_path.c_str());
-            md_fanout = std::make_unique<FanoutProcessMsg>(
-                console_processor,
+            md_fanout = std::make_unique<FanoutMsgController>(
+                console_controller,
                 *received_quotes);
-            oe_fanout = std::make_unique<FanoutProcessMsg>(
-                console_processor,
+            oe_fanout = std::make_unique<FanoutMsgController>(
+                console_controller,
                 *received_trades);
-            md_processor = md_fanout.get();
-            oe_processor = oe_fanout.get();
+            md_controller = md_fanout.get();
+            oe_controller = oe_fanout.get();
         }
 
         //wait for connection
@@ -154,10 +154,10 @@ namespace slipstream {
             }
 
             if (poll_fds[md_index].revents & POLLIN) {
-                recvMarketEvent(md_client, md_decoder, *md_processor);
+                recvMarketEvent(md_client, md_decoder, *md_controller);
             }
             if (poll_fds[oe_index].revents & POLLIN) {
-                recvMarketEvent(oe_client, oe_decoder, *oe_processor);
+                recvMarketEvent(oe_client, oe_decoder, *oe_controller);
             }
 
             if (poll_fds[oe_index].revents & POLLOUT) {
@@ -171,7 +171,7 @@ namespace slipstream {
     void NetworkManager::recvMarketEvent(
         utils::Socket& client,
         codec::ServerSideDecoder& decoder,
-        IProcessMsgClass& processor) {
+        IMsgController& controller) {
 
         std::array<std::byte, 4096> recv_buffer;
 
@@ -202,7 +202,7 @@ namespace slipstream {
                         ingress_generation->notify_one();
                     }
 
-                    processor.Sink(recv_message);
+                    controller.Sink(recv_message);
                 }
 
                 if (result.status == codec::DecodeStatus::error) {

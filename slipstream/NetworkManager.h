@@ -16,7 +16,7 @@
 #include <unistd.h>
 #include <rigtorp/SPSCQueue.h>
 
-class IProcessMsgClass;
+class IMsgController;
 
 namespace slipstream {
     class NetworkManager {
@@ -48,7 +48,7 @@ namespace slipstream {
         void recvMarketEvent(
             utils::Socket& client,
             codec::ServerSideDecoder& decoder,
-            IProcessMsgClass& processor);
+            IMsgController& controller);
 
         utils::Socket md_listener{};
         utils::Socket oe_listener{};

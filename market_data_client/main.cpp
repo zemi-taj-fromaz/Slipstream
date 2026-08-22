@@ -18,40 +18,20 @@
 
 namespace {
 
-class CodecProcessMsg final : public IProcessMsgClass {
+class MDMsgController final : public IMsgController {
 public:
-    explicit CodecProcessMsg(spdlog::logger& logger)
-        : logger_{logger} {
-    }
-
-    void Sink(const MarketEvent& event) override {
-        std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
-        const std::size_t encoded_size =
-            slipstream::codec::EncodeMarketEvent(event, buffer);
-
-        logger_.info("Encoded market event into {} bytes", encoded_size);
-    }
-
-private:
-    spdlog::logger& logger_;
-};
-
-class NetworkProcessMsg final : public IProcessMsgClass {
-public:
-    NetworkProcessMsg(const char* host, std::uint16_t port) {
+    MDMsgController(const char* host, std::uint16_t port) {
         constexpr int send_buffer_size = 1024 * 1024;
         socket_.SetTcpNoDelay();
         socket_.SetSendBufferSize(send_buffer_size);
         socket_.Connect(host, port);
     }
 
-    void Sink(const MarketEvent& event) override {
+    void Send(const MarketEvent& event) override {
         std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
         const std::size_t encoded_size = slipstream::codec::EncodeMarketEvent(event, buffer);
 
         socket_.SendAll({buffer.data(), encoded_size});
-
-        //logger_.info("Encoded market event into {} bytes", encoded_size);
     }
 
 private:
@@ -77,22 +57,22 @@ int main(int argc, char* argv[]) {
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
-        NetworkProcessMsg net_processor{options.host.c_str(), options.port};
+        MDMsgController md_controller{options.host.c_str(), options.port};
 
         if (utils::ReplayVerificationEnabled()) {
             const std::string expected_path =
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/expected_quotes.csv";
-            CanonicalFileProcessMsg expected_events{expected_path.c_str()};
-            FanoutProcessMsg processor{expected_events, net_processor};
+            CanonicalFileMsgController expected_events{expected_path.c_str()};
+            FanoutMsgController controller{expected_events, md_controller};
             ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                processor,
+                controller,
                 options.start_at_ns);
         } else {
             ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                net_processor,
+                md_controller,
                 options.start_at_ns);
         }
 

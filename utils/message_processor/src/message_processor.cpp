@@ -8,61 +8,19 @@
 #include <utility>
 #include <variant>
 
-void IProcessMsgClass::Sink(const MarketEvent&) {
+void IMsgController::Sink(const MarketEvent&) {
 }
 
-FileProcessMsg::FileProcessMsg(const char* path)
-    : file_{path} {
-    if (!file_) {
-        throw std::runtime_error("failed to open message processing log file");
-    }
-
-    file_ << "event_ts_ns,wall_delta_ns,event_delta_ns,type,symbol,"
-             "bid_price,bid_qty,ask_price,ask_qty,price,qty\n";
+void IMsgController::Send(const MarketEvent& event) {
+    Sink(event);
 }
 
-void FileProcessMsg::Sink(const MarketEvent& event) {
-    const auto now = std::chrono::steady_clock::now();
-
-    std::uint64_t wall_delta_ns = 0;
-    std::uint64_t event_delta_ns = 0;
-    if (has_last_event_) {
-        wall_delta_ns = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                now - last_sink_)
-                .count());
-
-        if (event.ts >= last_event_timestamp_) {
-            event_delta_ns = event.ts - last_event_timestamp_;
-        }
-    }
-
-    file_ << event.ts << ','
-          << wall_delta_ns << ','
-          << event_delta_ns << ',';
-
-    if (std::holds_alternative<Quote>(event.payload)) {
-        const auto& quote = std::get<Quote>(event.payload);
-        file_ << 'Q' << ','
-              << event.symbol << ','
-              << quote.bid_price << ','
-              << quote.bid_qty << ','
-              << quote.ask_price << ','
-              << quote.ask_qty << ",,\n";
-    } else {
-        const auto& trade = std::get<Trade>(event.payload);
-        file_ << 'T' << ','
-              << event.symbol << ",,,,,"
-              << trade.price << ','
-              << trade.qty << '\n';
-    }
-
-    last_sink_ = now;
-    last_event_timestamp_ = event.ts;
-    has_last_event_ = true;
+void IMsgController::ProcessInboundUntil(
+    std::chrono::steady_clock::time_point deadline) {
+    std::this_thread::sleep_until(deadline);
 }
 
-CanonicalFileProcessMsg::CanonicalFileProcessMsg(const char* path)
+CanonicalFileMsgController::CanonicalFileMsgController(const char* path)
     : file_{path} {
     if (!file_) {
         throw std::runtime_error("failed to open canonical event file");
@@ -72,7 +30,7 @@ CanonicalFileProcessMsg::CanonicalFileProcessMsg(const char* path)
              "price,qty,aggressor,id\n";
 }
 
-void CanonicalFileProcessMsg::Sink(const MarketEvent& event) {
+void CanonicalFileMsgController::Sink(const MarketEvent& event) {
     file_ << event.ts << ',';
 
     if (std::holds_alternative<Quote>(event.payload)) {
@@ -95,11 +53,11 @@ void CanonicalFileProcessMsg::Sink(const MarketEvent& event) {
           << trade.id << '\n';
 }
 
-ConsoleProcessMsg::ConsoleProcessMsg(std::string process_name)
+ConsoleMsgController::ConsoleMsgController(std::string process_name)
     : process_name_{std::move(process_name)} {
 }
 
-void ConsoleProcessMsg::Sink(const MarketEvent& event) {
+void ConsoleMsgController::Sink(const MarketEvent& event) {
     if (!process_name_.empty()) {
         std::cout << '[' << process_name_ << "] ";
     }
@@ -122,14 +80,19 @@ void ConsoleProcessMsg::Sink(const MarketEvent& event) {
     std::cout << '\n' << std::flush;
 }
 
-FanoutProcessMsg::FanoutProcessMsg(
-    IProcessMsgClass& first,
-    IProcessMsgClass& second)
+FanoutMsgController::FanoutMsgController(
+    IMsgController& first,
+    IMsgController& second)
     : first_{first},
       second_{second} {
 }
 
-void FanoutProcessMsg::Sink(const MarketEvent& event) {
+void FanoutMsgController::Sink(const MarketEvent& event) {
     first_.Sink(event);
     second_.Sink(event);
+}
+
+void FanoutMsgController::Send(const MarketEvent& event) {
+    first_.Send(event);
+    second_.Send(event);
 }
