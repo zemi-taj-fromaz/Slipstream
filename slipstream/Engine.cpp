@@ -4,11 +4,14 @@
 
 #include "Engine.h"
 
+#include <algorithm>
 #include <cstring>
 #if defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h>
 #endif
+#include <iostream>
 #include <stdexcept>
+#include <string>
 
 namespace {
 
@@ -20,6 +23,11 @@ inline void CpuRelax() noexcept {
 #else
 #error "CpuRelax is not implemented for this architecture"
 #endif
+}
+
+std::string SymbolText(const char* symbol, const std::size_t size) {
+    const char* end = std::find(symbol, symbol + size, '\0');
+    return {symbol, end};
 }
 
 } // namespace
@@ -40,12 +48,25 @@ void Engine::Run() {
         if (MarketEvent* event = ingress.front()) {
             const TradeResult result = trade_manager.Push(*event);
 
-            if (result == TradeResult::UserTradeAccepted ||
-                result == TradeResult::UserTradeRejected) {
+            if (IsUserTradeResult(result)) {
                 const auto* trade = std::get_if<Trade>(&event->payload);
                 if (trade == nullptr) {
                     throw std::logic_error(
                         "user trade result produced for a non-trade event");
+                }
+
+                if (IsUserTradeRejected(result)) {
+                    std::cout
+                        << "[slipstream] Rejecting NewOrder reason="
+                        << TradeRejectionReason(result)
+                        << " trade_id=" << trade->id
+                        << " symbol=" << SymbolText(
+                            event->symbol,
+                            sizeof(event->symbol))
+                        << " qty=" << trade->qty
+                        << " price=" << trade->price
+                        << '\n'
+                        << std::flush;
                 }
 
                 slipstream::codec::NewOrderMessage order{

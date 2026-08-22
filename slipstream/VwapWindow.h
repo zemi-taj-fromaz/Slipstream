@@ -30,7 +30,6 @@ enum class TradeResult : std::uint8_t {
     NoOrder,
     MarketTradeRecorded,
     UserTradeAccepted,
-    UserTradeRejectedVwapNotReady,
     UserTradeRejectedMaxQuantity,
     UserTradeRejectedParticipationCap,
 };

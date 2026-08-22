@@ -16,15 +16,12 @@ bool IsUserTradeResult(const TradeResult result) noexcept {
 }
 
 bool IsUserTradeRejected(const TradeResult result) noexcept {
-    return result == TradeResult::UserTradeRejectedVwapNotReady ||
-           result == TradeResult::UserTradeRejectedMaxQuantity ||
+    return result == TradeResult::UserTradeRejectedMaxQuantity ||
            result == TradeResult::UserTradeRejectedParticipationCap;
 }
 
 const char* TradeRejectionReason(const TradeResult result) noexcept {
     switch (result) {
-    case TradeResult::UserTradeRejectedVwapNotReady:
-        return "vwap_not_ready";
     case TradeResult::UserTradeRejectedMaxQuantity:
         return "max_quantity";
     case TradeResult::UserTradeRejectedParticipationCap:
@@ -82,7 +79,7 @@ TradeResult VwapWindow::checkConstraints(const TradePrint& trade_print) {
     }
 
     if (!warmup_gate_passed || count < 10) {
-        return TradeResult::UserTradeRejectedVwapNotReady;
+        return TradeResult::NoOrder;
     }
 
     if (trade_print.qty > max_qty) {
