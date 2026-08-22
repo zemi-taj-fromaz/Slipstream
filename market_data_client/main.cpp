@@ -1,12 +1,8 @@
 #include "parser.h"
+#include "md_msg_controller.h"
 #include "message_processor.h"
 #include "replay_start.h"
-#include "socket.h"
 
-#include "slipstream_codec/market_data_codec.h"
-
-#include <array>
-#include <cstddef>
 #include <exception>
 #include <memory>
 #include <string>
@@ -16,30 +12,6 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-namespace {
-
-class MDMsgController final : public IMsgController {
-public:
-    MDMsgController(const char* host, std::uint16_t port) {
-        constexpr int send_buffer_size = 1024 * 1024;
-        socket_.SetTcpNoDelay();
-        socket_.SetSendBufferSize(send_buffer_size);
-        socket_.Connect(host, port);
-    }
-
-    void Send(const MarketEvent& event) override {
-        std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
-        const std::size_t encoded_size = slipstream::codec::EncodeMarketEvent(event, buffer);
-
-        socket_.SendAll({buffer.data(), encoded_size});
-    }
-
-private:
-    utils::Socket socket_;
-};
-
-} // namespace
-
 int main(int argc, char* argv[]) {
     constexpr auto csv_path = SLIPSTREAM_CSV_PATH;
 
@@ -48,7 +20,8 @@ int main(int argc, char* argv[]) {
         "market_data_client.log",
         true);
     const std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
-    spdlog::logger logger{"market_data_client", sinks.begin(), sinks.end()};
+    spdlog::logger logger{"mdclient", sinks.begin(), sinks.end()};
+    logger.set_pattern("[%n] %v");
 
     try {
         const utils::ReplayClientOptions options =
