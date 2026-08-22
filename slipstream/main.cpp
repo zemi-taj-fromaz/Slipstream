@@ -17,6 +17,9 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "NetworkManager.h"
+#include "Engine.h"
+
+#include <thread>
 
 namespace {
 
@@ -134,8 +137,50 @@ int main(int argc, char* argv[]) {
     try {
         const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);
 
-        slipstream::NetworkManager network_manager{slipstream_config};
-        network_manager.Process();
+        constexpr std::size_t queue_capacity = 4096;
+        rigtorp::SPSCQueue<MarketEvent> ingress{queue_capacity};
+        rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage> egress{
+            queue_capacity};
+
+        slipstream::NetworkManager network_manager{
+            slipstream_config,
+            ingress,
+            egress};
+        Engine engine{
+            slipstream_config,
+            ingress,
+            egress};
+
+        std::exception_ptr network_error;
+        std::exception_ptr engine_error;
+
+        std::jthread network_thread{[&] {
+            try {
+                network_manager.Process();
+            } catch (...) {
+                network_error = std::current_exception();
+            }
+        }};
+
+        std::jthread engine_thread{[&] {
+            try {
+                engine.Run();
+            } catch (...) {
+                engine_error = std::current_exception();
+            }
+        }};
+
+        network_thread.join();
+        engine.Stop();
+        engine_thread.join();
+
+        if (network_error) {
+            std::rethrow_exception(network_error);
+        }
+        if (engine_error) {
+            std::rethrow_exception(engine_error);
+        }
+
         return 0;
     } catch (const std::exception& error) {
         logger.error("Slipstream failed: {}", error.what());
