@@ -12,7 +12,7 @@ TradeManager::TradeManager(const SlipstreamConfig& slipstream) : vwap_window(sli
 
 }
 
-bool TradeManager::Push(MarketEvent& event) {
+TradeResult TradeManager::Push(MarketEvent& event) {
     if (auto* quote = std::get_if<Quote>(&event.payload)) {
         if (!book) {
             book = std::make_unique<L1Book>(L1Book{
@@ -21,7 +21,7 @@ bool TradeManager::Push(MarketEvent& event) {
                 .ask_price = quote->ask_price,
                 .ask_qty = quote->ask_qty,
             });
-            return false;
+            return TradeResult::NoOrder;
         }
 
         std::array<TradePrint, 2> inferred_trades{};
@@ -72,13 +72,21 @@ bool TradeManager::Push(MarketEvent& event) {
         };
 
         //update vwap
-        return inferred_count != 0;
+        return inferred_count != 0
+            ? TradeResult::MarketTradeRecorded
+            : TradeResult::NoOrder;
     }
     else if (auto* trade = std::get_if<Trade>(&event.payload)) {
         (void)trade;
-        //checkConstraints();
-        //updateVwap()
+
+        return vwap_window.push(TradePrint{
+                .pq = static_cast<__int128_t>(trade->price) * trade->qty,
+                .ts_ns = event.ts,
+                .price = trade->price,
+                .qty = trade->qty,
+                .origin = TradeOrigin::User,
+            });
     }
 
-    return false;
+    return TradeResult::NoOrder;
 }

@@ -19,9 +19,21 @@ VwapWindow::VwapWindow(const SlipstreamConfig& slipstream)
       band_bps(slipstream.band_bps) {
 }
 
-void VwapWindow::push(TradePrint trade_print) {
+TradeResult VwapWindow::push(TradePrint trade_print) {
     evictExpired(trade_print.ts_ns);
 
+    const TradeResult result = checkConstraints(trade_print);
+    if (result == TradeResult::NoOrder ||
+        result == TradeResult::UserTradeRejected) {
+        return result;
+    }
+
+    insert(trade_print);
+    recomputeMetrics();
+    return result;
+}
+
+TradeResult VwapWindow::checkConstraints(const TradePrint& trade_print) {
     if (trade_print.origin == TradeOrigin::Market) {
         if (!warmup_gate_passed) {
             if (observedQuotes == 0) {
@@ -38,26 +50,30 @@ void VwapWindow::push(TradePrint trade_print) {
                 warmup_gate_passed = true;
             }
         }
-    } else {
-        if (!warmup_gate_passed || trade_print.qty > max_qty || count < 10) {
-            return;
-        }
 
-        const auto quantity_after_trade = sum_qty + trade_print.qty;
-        const auto user_quantity_after_trade =
-            sum_user_qty + trade_print.qty;
-
-        const auto participation_after_trade =
-            static_cast<double>(user_quantity_after_trade) /
-            static_cast<double>(quantity_after_trade);
-
-        if (participation_after_trade > participation_cap) {
-            return;
-        }
+        return TradeResult::MarketTradeRecorded;
     }
 
-    insert(trade_print);
-    recomputeMetrics();
+    if (!warmup_gate_passed || count < 10) {
+        return TradeResult::NoOrder;
+    }
+
+    if (trade_print.qty > max_qty) {
+        return TradeResult::UserTradeRejected;
+    }
+
+    const auto quantity_after_trade =
+        sum_qty + trade_print.qty;
+    const auto user_quantity_after_trade =
+        sum_user_qty + trade_print.qty;
+
+    const auto participation_after_trade =
+        static_cast<double>(user_quantity_after_trade) /
+        static_cast<double>(quantity_after_trade);
+
+    return participation_after_trade <= participation_cap
+        ? TradeResult::UserTradeAccepted
+        : TradeResult::UserTradeRejected;
 }
 
 void VwapWindow::evictExpired(const std::uint64_t now_ns) {

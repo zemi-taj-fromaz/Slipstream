@@ -26,13 +26,22 @@ struct TradePrint {
     TradeOrigin origin{};
 };
 
+enum class TradeResult : std::uint8_t {
+    NoOrder,
+    MarketTradeRecorded,
+    UserTradeAccepted,
+    UserTradeRejected,
+};
+
 class VwapWindow {
 public:
     explicit VwapWindow(const SlipstreamConfig& slipstream);
 
-    void push(TradePrint trade_print);
+    TradeResult push(TradePrint trade_print);
 
 private:
+    [[nodiscard]] TradeResult checkConstraints(
+        const TradePrint& trade_print);
     void evictExpired(std::uint64_t now_ns);
     void insert(const TradePrint& trade_print);
     void recomputeMetrics();

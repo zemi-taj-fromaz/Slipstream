@@ -21,7 +21,7 @@ class TradeManager {
 public:
     TradeManager(const SlipstreamConfig& slipstream);
 
-    bool Push(MarketEvent& event);
+    TradeResult Push(MarketEvent& event);
 
 private:
     VwapWindow vwap_window;

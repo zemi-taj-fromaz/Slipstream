@@ -23,8 +23,8 @@ class Engine {
     private:
         TradeManager trade_manager;
 
-    rigtorp::SPSCQueue<MarketEvent>& ingress;
-    rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& egress;
+        rigtorp::SPSCQueue<MarketEvent>& ingress;
+        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& egress;
 
 };
 
