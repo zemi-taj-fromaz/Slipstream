@@ -1,7 +1,11 @@
 add_executable(slipstream
     main.cpp
+    Engine.cpp
+    Engine.h
     NetworkManager.cpp
     NetworkManager.h
+    TradeManager.cpp
+    TradeManager.h
     VwapWindow.cpp
     VwapWindow.h
 )
