@@ -34,17 +34,22 @@ struct TradePrint {
 };
 
 enum class TradeResult : std::uint8_t {
-    NoOrder,
-    MarketTradeRecorded,
-    UserTradeAccepted,
-    UserTradeRejectedBand,
-    UserTradeRejectedMaxQuantity,
-    UserTradeRejectedParticipationCap,
+    NoOrder = 0,
+    MarketTradeRecorded = 1,
+
+    UserTradeAccepted = 2,
+
+    UserTradeRejectedBand = 4,
+    UserTradeRejected_ParticipationCap = 8,
+    UserTradePartial_MaxQuantity = 16,
+    UserTradePartial_ParticipationCap = 32,
 };
 
 struct TradeDecision {
     TradeResult result{TradeResult::NoOrder};
     TradeSide side{TradeSide::Unknown};
+    std::uint32_t submitted_qty{};
+    std::uint32_t executed_qty{};
 };
 
 [[nodiscard]] bool IsUserTradeResult(TradeResult result) noexcept;

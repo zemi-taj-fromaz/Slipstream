@@ -70,19 +70,19 @@ void Engine::Run() {
                     "user trade result produced for a non-trade event");
             }
 
-            execution_report_.submitted_qty += trade->qty;
+            execution_report_.submitted_qty += decision.submitted_qty;
 
             if (result == TradeResult::UserTradeAccepted) {
                 const __int128_t pq =
-                    static_cast<__int128_t>(trade->price) * trade->qty;
-                execution_report_.executed_qty += trade->qty;
+                    static_cast<__int128_t>(trade->price) * decision.executed_qty;
+                execution_report_.executed_qty += decision.executed_qty;
                 execution_report_.executed_pq_sum += pq;
 
                 if (decision.side == TradeSide::Buy) {
-                    execution_report_.buy_qty += trade->qty;
+                    execution_report_.buy_qty += decision.executed_qty;
                     execution_report_.buy_pq_sum += pq;
                 } else if (decision.side == TradeSide::Sell) {
-                    execution_report_.sell_qty += trade->qty;
+                    execution_report_.sell_qty += decision.executed_qty;
                     execution_report_.sell_pq_sum += pq;
                 } else {
                     throw std::logic_error(
@@ -114,21 +114,22 @@ void Engine::Run() {
 
                 slipstream::codec::NewOrderMessage order{
                     .client_order_id = next_client_order_id++,
-                    .status = result == TradeResult::UserTradeAccepted
-                        ? slipstream::codec::NewOrderStatus::accepted
-                        : slipstream::codec::NewOrderStatus::rejected,
+                    .status = IsUserTradeRejected(result)
+                        ? slipstream::codec::NewOrderStatus::rejected
+                        : slipstream::codec::NewOrderStatus::accepted,
                     .ts_ns = event->ts,
                     .trade_id = trade->id,
 
                     .side = decision.side == TradeSide::Sell
                         ? slipstream::codec::OrderSide::sell
                         : slipstream::codec::OrderSide::buy,
-                    .qty = trade->qty,
+                    .qty = decision.executed_qty,
                     .limit_px = trade->price,
                 };
                 std::memcpy(order.symbol, event->symbol, sizeof(order.symbol));
 
                 slipstream::codec::OrderEntryClientMessage outbound{order};
+
                 while (!egress.try_push(outbound)) {
                     if (!running.load(std::memory_order_acquire)) {
                         return;
