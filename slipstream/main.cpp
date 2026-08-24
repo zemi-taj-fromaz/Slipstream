@@ -7,6 +7,8 @@
 #include <exception>
 #include <charconv>
 #include <cstdint>
+#include <fstream>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -187,6 +189,29 @@ int main(int argc, char* argv[]) {
         if (engine_error) {
             std::rethrow_exception(engine_error);
         }
+
+        const std::string report = FormatExecutionReport(
+            engine.GetExecutionReport(),
+            slipstream_config);
+
+        std::ofstream report_file{
+            SLIPSTREAM_EXECUTION_REPORT_PATH,
+            std::ios::trunc};
+        if (!report_file) {
+            throw std::runtime_error(
+                "failed to open execution report file");
+        }
+
+        report_file << report;
+        if (!report_file) {
+            throw std::runtime_error(
+                "failed to write execution report file");
+        }
+
+        std::cout << report << std::flush;
+        logger.info(
+            "Execution report written to {}",
+            SLIPSTREAM_EXECUTION_REPORT_PATH);
 
         return 0;
     } catch (const std::exception& error) {

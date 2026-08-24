@@ -6,6 +6,7 @@
 #define SLIPSTREAM_ENGINE_H
 
 #include "SlipstreamConfig.h"
+#include "ExecutionReport.h"
 #include "TradeManager.h"
 #include "slipstream_codec/market_data_codec.h"
 #include "rigtorp/SPSCQueue.h"
@@ -25,10 +26,14 @@ class Engine {
 
         void Run();
         void Stop() noexcept;
+        [[nodiscard]]
+        const ExecutionReport& GetExecutionReport() const noexcept;
 
 
     private:
+        const SlipstreamConfig& config_;
         TradeManager trade_manager;
+        ExecutionReport execution_report_;
 
         rigtorp::SPSCQueue<MarketEvent>& ingress;
         rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& egress;

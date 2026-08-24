@@ -25,7 +25,7 @@ enum class TradeSide : std::uint8_t {
 };
 
 struct TradePrint {
-    __int128_t pq{};
+    __int128_t notional{};
     std::uint64_t ts_ns{};
     std::int64_t price{};
     std::uint32_t qty{};
@@ -45,8 +45,6 @@ enum class TradeResult : std::uint8_t {
 struct TradeDecision {
     TradeResult result{TradeResult::NoOrder};
     TradeSide side{TradeSide::Unknown};
-    std::int64_t vwap{};
-    double band_bps{};
 };
 
 [[nodiscard]] bool IsUserTradeResult(TradeResult result) noexcept;
@@ -58,6 +56,7 @@ public:
     explicit VwapWindow(const SlipstreamConfig& slipstream);
 
     TradeDecision push(TradePrint trade_print);
+    [[nodiscard]] std::int64_t RollingVwap() const noexcept;
 
 private:
     [[nodiscard]] TradeDecision checkConstraints(TradePrint& trade_print);
@@ -85,12 +84,9 @@ private:
     std::uint32_t observedQuotes{};
 
     __int128_t rolling_vwap{};
-    __int128_t sum_pq{};
+    __int128_t sum_market_notional{};
     std::uint64_t sum_market_qty{};
     std::uint64_t sum_user_qty{};
-    std::uint64_t sum_qty{};
-
-    double current_participation{};
 };
 
 #endif // SLIPSTREAM_VWAPWINDOW_H

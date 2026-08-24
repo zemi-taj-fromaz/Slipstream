@@ -37,7 +37,8 @@ Engine::Engine(const SlipstreamConfig& slipstream,
                rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& out,
                std::atomic<std::uint64_t>& generation,
                std::function<void()> egress_notifier)
-    : trade_manager(slipstream),
+    : config_(slipstream),
+      trade_manager(slipstream),
       ingress(in),
       egress(out),
       ingress_generation(generation),
@@ -46,15 +47,50 @@ Engine::Engine(const SlipstreamConfig& slipstream,
 void Engine::Run() {
     while (running.load(std::memory_order_relaxed)) {
         if (MarketEvent* event = ingress.front()) {
-            const TradeDecision decision = trade_manager.Push(*event);
+            const TradeManagerResult manager_result =
+                trade_manager.Push(*event);
+
+            if (const auto* market =
+                    std::get_if<MarketUpdateResult>(&manager_result)) {
+                execution_report_.market_qty +=
+                    market->market_qty_delta;
+                execution_report_.market_notional_sum +=
+                    market->market_notional_delta;
+
+                ingress.pop();
+                continue;
+            }
+
+            const auto& user = std::get<UserTradeResult>(manager_result);
+            const TradeDecision& decision = user.decision;
             const TradeResult result = decision.result;
+            const auto* trade = std::get_if<Trade>(&event->payload);
+            if (trade == nullptr) {
+                throw std::logic_error(
+                    "user trade result produced for a non-trade event");
+            }
+
+            execution_report_.submitted_qty += trade->qty;
+
+            if (result == TradeResult::UserTradeAccepted) {
+                const __int128_t notional =
+                    static_cast<__int128_t>(trade->price) * trade->qty;
+                execution_report_.executed_qty += trade->qty;
+                execution_report_.executed_notional_sum += notional;
+
+                if (decision.side == TradeSide::Buy) {
+                    execution_report_.buy_qty += trade->qty;
+                    execution_report_.buy_notional_sum += notional;
+                } else if (decision.side == TradeSide::Sell) {
+                    execution_report_.sell_qty += trade->qty;
+                    execution_report_.sell_notional_sum += notional;
+                } else {
+                    throw std::logic_error(
+                        "accepted user trade has unknown side");
+                }
+            }
 
             if (IsUserTradeResult(result)) {
-                const auto* trade = std::get_if<Trade>(&event->payload);
-                if (trade == nullptr) {
-                    throw std::logic_error(
-                        "user trade result produced for a non-trade event");
-                }
                 if (decision.side == TradeSide::Unknown) {
                     throw std::logic_error(
                         "user trade decision has unknown side");
@@ -70,8 +106,8 @@ void Engine::Run() {
                             sizeof(event->symbol))
                         << " qty=" << trade->qty
                         << " price=" << trade->price
-                        << " vwap=" << decision.vwap
-                        << " band_bps=" << decision.band_bps
+                        << " vwap=" << user.rolling_vwap
+                        << " band_bps=" << config_.band_bps
                         << '\n'
                         << std::flush;
                 }
@@ -124,4 +160,8 @@ void Engine::Stop() noexcept {
     running.store(false, std::memory_order_release);
     ingress_generation.fetch_add(1, std::memory_order_release);
     ingress_generation.notify_one();
+}
+
+const ExecutionReport& Engine::GetExecutionReport() const noexcept {
+    return execution_report_;
 }

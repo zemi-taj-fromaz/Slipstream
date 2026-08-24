@@ -15,7 +15,7 @@ TradePrint MakePrint(const std::int64_t price,
                      const TradeOrigin origin,
                      const TradeSide side = TradeSide::Unknown) {
     return TradePrint{
-        .pq = static_cast<__int128_t>(price) * qty,
+        .notional = static_cast<__int128_t>(price) * qty,
         .ts_ns = ts_ns,
         .price = price,
         .qty = qty,
@@ -142,6 +142,20 @@ TEST(VwapWindowBands, UsesBuyAsEqualPriceTieBreaker) {
         decision.result,
         TradeResult::UserTradeRejectedBand);
     EXPECT_EQ(decision.side, TradeSide::Buy);
+}
+
+TEST(VwapWindowBands, AcceptedUserTradesDoNotChangeMarketVwap) {
+    VwapWindow window = MakeWarmWindow();
+
+    const TradeDecision decision = window.push(
+        MakePrint(
+            997'000,
+            100,
+            window_ns,
+            TradeOrigin::User));
+
+    ASSERT_EQ(decision.result, TradeResult::UserTradeAccepted);
+    EXPECT_EQ(window.RollingVwap(), market_price);
 }
 
 }

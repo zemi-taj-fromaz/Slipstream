@@ -34,6 +34,23 @@ target_link_libraries(vwap_window_tests
 
 gtest_discover_tests(vwap_window_tests)
 
+add_executable(execution_report_tests
+    execution_report_tests.cpp
+    ../slipstream/ExecutionReport.cpp
+)
+
+target_include_directories(execution_report_tests
+    PRIVATE
+        ../slipstream
+)
+
+target_link_libraries(execution_report_tests
+    PRIVATE
+        GTest::gtest_main
+)
+
+gtest_discover_tests(execution_report_tests)
+
 add_executable(message_processor_tests
     message_processor_tests.cpp
 )
