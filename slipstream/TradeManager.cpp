@@ -52,7 +52,7 @@ TradeManagerResult TradeManager::Push(MarketEvent& event) {
             }
 
             inferred_trades[inferred_count++] = TradePrint{
-                .notional = static_cast<__int128_t>(price) * qty,
+                .pq = static_cast<__int128_t>(price) * qty,
                 .ts_ns = event.ts,
                 .price = price,
                 .qty = qty,
@@ -90,8 +90,8 @@ TradeManagerResult TradeManager::Push(MarketEvent& event) {
         MarketUpdateResult result{};
         for (std::size_t i = 0; i < inferred_count; ++i) {
             vwap_window.push(inferred_trades[i]);
-            result.market_notional_delta +=
-                inferred_trades[i].notional;
+            result.market_pq_delta +=
+                inferred_trades[i].pq;
             result.market_qty_delta +=
                 inferred_trades[i].qty;
         }
@@ -107,7 +107,7 @@ TradeManagerResult TradeManager::Push(MarketEvent& event) {
     }
     else if (auto* trade = std::get_if<Trade>(&event.payload)) {
         const TradeDecision decision = vwap_window.push(TradePrint{
-                .notional =
+                .pq =
                     static_cast<__int128_t>(trade->price) * trade->qty,
                 .ts_ns = event.ts,
                 .price = trade->price,

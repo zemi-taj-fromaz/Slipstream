@@ -185,7 +185,7 @@ void VwapWindow::evictExpired(const std::uint64_t now_ns) {
         const TradePrint& expired = trades[tail];
 
         if (expired.origin == TradeOrigin::Market) {
-            sum_market_notional -= expired.notional;
+            sum_market_pq -= expired.pq;
             sum_market_qty -= expired.qty;
         } else {
             sum_user_qty -= expired.qty;
@@ -214,7 +214,7 @@ void VwapWindow::insert(const TradePrint& trade_print) {
     }
 
     if (trade_print.origin == TradeOrigin::Market) {
-        sum_market_notional += trade_print.notional;
+        sum_market_pq += trade_print.pq;
         sum_market_qty += trade_print.qty;
     } else {
         sum_user_qty += trade_print.qty;
@@ -227,7 +227,7 @@ void VwapWindow::recomputeMetrics() {
         return;
     }
 
-    rolling_vwap = sum_market_notional / sum_market_qty;
+    rolling_vwap = sum_market_pq / sum_market_qty;
 }
 
 std::int64_t VwapWindow::RollingVwap() const noexcept {

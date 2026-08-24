@@ -46,21 +46,21 @@ std::string FormatExecutionReport(
     const std::int64_t average_fill_price = report.executed_qty == 0
         ? 0
         : static_cast<std::int64_t>(
-            report.executed_notional_sum / report.executed_qty);
+            report.executed_pq_sum / report.executed_qty);
 
     const std::int64_t session_vwap = report.market_qty == 0
         ? 0
         : static_cast<std::int64_t>(
-            report.market_notional_sum / report.market_qty);
+            report.market_pq_sum / report.market_qty);
 
     double slippage_bps = 0.0;
     if (report.executed_qty != 0 && session_vwap != 0) {
         const __int128_t buy_cost =
-            report.buy_notional_sum -
+            report.buy_pq_sum -
             static_cast<__int128_t>(session_vwap) * report.buy_qty;
         const __int128_t sell_cost =
             static_cast<__int128_t>(session_vwap) * report.sell_qty -
-            report.sell_notional_sum;
+            report.sell_pq_sum;
         const __int128_t denominator =
             static_cast<__int128_t>(session_vwap) *
             report.executed_qty;

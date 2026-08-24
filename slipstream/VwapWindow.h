@@ -25,7 +25,7 @@ enum class TradeSide : std::uint8_t {
 };
 
 struct TradePrint {
-    __int128_t notional{};
+    __int128_t pq{};
     std::uint64_t ts_ns{};
     std::int64_t price{};
     std::uint32_t qty{};
@@ -84,7 +84,7 @@ private:
     std::uint32_t observedQuotes{};
 
     __int128_t rolling_vwap{};
-    __int128_t sum_market_notional{};
+    __int128_t sum_market_pq{};
     std::uint64_t sum_market_qty{};
     std::uint64_t sum_user_qty{};
 };

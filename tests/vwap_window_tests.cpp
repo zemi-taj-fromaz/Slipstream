@@ -15,7 +15,7 @@ TradePrint MakePrint(const std::int64_t price,
                      const TradeOrigin origin,
                      const TradeSide side = TradeSide::Unknown) {
     return TradePrint{
-        .notional = static_cast<__int128_t>(price) * qty,
+        .pq = static_cast<__int128_t>(price) * qty,
         .ts_ns = ts_ns,
         .price = price,
         .qty = qty,

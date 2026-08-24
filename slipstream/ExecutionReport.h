@@ -11,14 +11,14 @@ struct ExecutionReport {
     std::uint64_t submitted_qty{};
     std::uint64_t executed_qty{};
 
-    __int128_t market_notional_sum{};
-    __int128_t executed_notional_sum{};
+    __int128_t market_pq_sum{};
+    __int128_t executed_pq_sum{};
 
     std::uint64_t buy_qty{};
     std::uint64_t sell_qty{};
 
-    __int128_t buy_notional_sum{};
-    __int128_t sell_notional_sum{};
+    __int128_t buy_pq_sum{};
+    __int128_t sell_pq_sum{};
 };
 
 [[nodiscard]]

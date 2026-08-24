@@ -20,7 +20,7 @@ struct L1Book {
 };
 
 struct MarketUpdateResult {
-    __int128_t market_notional_delta{};
+    __int128_t market_pq_delta{};
     std::uint64_t market_qty_delta{};
 };
 

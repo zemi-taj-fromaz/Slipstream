@@ -54,8 +54,8 @@ void Engine::Run() {
                     std::get_if<MarketUpdateResult>(&manager_result)) {
                 execution_report_.market_qty +=
                     market->market_qty_delta;
-                execution_report_.market_notional_sum +=
-                    market->market_notional_delta;
+                execution_report_.market_pq_sum +=
+                    market->market_pq_delta;
 
                 ingress.pop();
                 continue;
@@ -73,17 +73,17 @@ void Engine::Run() {
             execution_report_.submitted_qty += trade->qty;
 
             if (result == TradeResult::UserTradeAccepted) {
-                const __int128_t notional =
+                const __int128_t pq =
                     static_cast<__int128_t>(trade->price) * trade->qty;
                 execution_report_.executed_qty += trade->qty;
-                execution_report_.executed_notional_sum += notional;
+                execution_report_.executed_pq_sum += pq;
 
                 if (decision.side == TradeSide::Buy) {
                     execution_report_.buy_qty += trade->qty;
-                    execution_report_.buy_notional_sum += notional;
+                    execution_report_.buy_pq_sum += pq;
                 } else if (decision.side == TradeSide::Sell) {
                     execution_report_.sell_qty += trade->qty;
-                    execution_report_.sell_notional_sum += notional;
+                    execution_report_.sell_pq_sum += pq;
                 } else {
                     throw std::logic_error(
                         "accepted user trade has unknown side");
