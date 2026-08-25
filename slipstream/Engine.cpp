@@ -30,6 +30,22 @@ std::string SymbolText(const char* symbol, const std::size_t size) {
     return {symbol, end};
 }
 
+slipstream::codec::RejectReason ToRejectReason(
+    const TradeResult result) noexcept {
+    if (result == TradeResult::UserTradeRejectedBand) {
+        return slipstream::codec::RejectReason::price;
+    }
+    if (result == TradeResult::UserTradeRejected_ParticipationCap ||
+        result == TradeResult::UserTradePartial_ParticipationCap) {
+        return slipstream::codec::RejectReason::risk;
+    }
+    if (result == TradeResult::UserTradePartial_MaxQuantity) {
+        return slipstream::codec::RejectReason::size;
+    }
+
+    return slipstream::codec::RejectReason::none;
+}
+
 } // namespace
 
 Engine::Engine(const SlipstreamConfig& slipstream,
@@ -72,7 +88,13 @@ void Engine::Run() {
 
             execution_report_.submitted_qty += decision.submitted_qty;
 
-            if (result == TradeResult::UserTradeAccepted) {
+            const bool rejected = IsUserTradeRejected(result);
+            const bool partial =
+                result == TradeResult::UserTradePartial_MaxQuantity ||
+                result == TradeResult::UserTradePartial_ParticipationCap;
+            const bool executed = !rejected && decision.executed_qty != 0;
+
+            if (executed) {
                 const __int128_t pq =
                     static_cast<__int128_t>(trade->price) * decision.executed_qty;
                 execution_report_.executed_qty += decision.executed_qty;
@@ -86,7 +108,7 @@ void Engine::Run() {
                     execution_report_.sell_pq_sum += pq;
                 } else {
                     throw std::logic_error(
-                        "accepted user trade has unknown side");
+                        "executed user trade has unknown side");
                 }
             }
 
@@ -96,7 +118,7 @@ void Engine::Run() {
                         "user trade decision has unknown side");
                 }
 
-                if (IsUserTradeRejected(result)) {
+                if (rejected) {
                     std::cout
                         << "[slipstream] Rejecting NewOrder reason="
                         << TradeRejectionReason(result)
@@ -112,9 +134,12 @@ void Engine::Run() {
                         << std::flush;
                 }
 
+
+                const std::uint64_t client_order_id = next_client_order_id++;
+
                 slipstream::codec::NewOrderMessage order{
-                    .client_order_id = next_client_order_id++,
-                    .status = IsUserTradeRejected(result)
+                    .client_order_id = client_order_id,
+                    .status = rejected
                         ? slipstream::codec::NewOrderStatus::rejected
                         : slipstream::codec::NewOrderStatus::accepted,
                     .ts_ns = event->ts,
@@ -123,19 +148,59 @@ void Engine::Run() {
                     .side = decision.side == TradeSide::Sell
                         ? slipstream::codec::OrderSide::sell
                         : slipstream::codec::OrderSide::buy,
-                    .qty = decision.executed_qty,
+                    .qty = decision.submitted_qty,
                     .limit_px = trade->price,
                 };
                 std::memcpy(order.symbol, event->symbol, sizeof(order.symbol));
 
-                slipstream::codec::OrderEntryClientMessage outbound{order};
+                if (!PushOutbound(order)) {
+                    return;
+                }
 
-                while (!egress.try_push(outbound)) {
-                    if (!running.load(std::memory_order_acquire)) {
+                const slipstream::codec::RejectReason reason =
+                    ToRejectReason(result);
+
+                if (rejected) {
+                    const slipstream::codec::ExecReportMessage reject_report{
+                        .client_order_id = client_order_id,
+                        .ts_ns = event->ts,
+                        .status = slipstream::codec::ExecStatus::reject,
+                        .filled_qty = 0,
+                        .avg_px = 0,
+                        .reason_code = reason,
+                    };
+
+                    if (!PushOutbound(reject_report)) {
+                        return;
+                    }
+                } else {
+                    const slipstream::codec::ExecReportMessage ack_report{
+                        .client_order_id = client_order_id,
+                        .ts_ns = event->ts,
+                        .status = slipstream::codec::ExecStatus::ack,
+                        .filled_qty = 0,
+                        .avg_px = 0,
+                        .reason_code = slipstream::codec::RejectReason::none,
+                    };
+
+                    if (!PushOutbound(ack_report)) {
                         return;
                     }
 
-                    CpuRelax();
+                    const slipstream::codec::ExecReportMessage final_report{
+                        .client_order_id = client_order_id,
+                        .ts_ns = event->ts,
+                        .status = partial
+                            ? slipstream::codec::ExecStatus::partial
+                            : slipstream::codec::ExecStatus::fill,
+                        .filled_qty = decision.executed_qty,
+                        .avg_px = trade->price,
+                        .reason_code = reason,
+                    };
+
+                    if (!PushOutbound(final_report)) {
+                        return;
+                    }
                 }
 
                 notify_egress();
@@ -161,6 +226,19 @@ void Engine::Stop() noexcept {
     running.store(false, std::memory_order_release);
     ingress_generation.fetch_add(1, std::memory_order_release);
     ingress_generation.notify_one();
+}
+
+bool Engine::PushOutbound(
+    slipstream::codec::OrderEntryClientMessage outbound) {
+    while (!egress.try_push(outbound)) {
+        if (!running.load(std::memory_order_acquire)) {
+            return false;
+        }
+
+        CpuRelax();
+    }
+
+    return true;
 }
 
 const ExecutionReport& Engine::GetExecutionReport() const noexcept {

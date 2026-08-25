@@ -542,6 +542,14 @@ DecodeResult DecodeOrderEntryClientMessage(
         }
         return result;
     }
+    if (type == exec_report_message_type) {
+        ExecReportMessage message{};
+        const DecodeResult result = DecodeExecReport(input, message);
+        if (result.status == DecodeStatus::message_ready) {
+            output = message;
+        }
+        return result;
+    }
     if (type == heartbeat_message_type) {
         HeartbeatMessage message{};
         const DecodeResult result = DecodeHeartbeat(input, message);

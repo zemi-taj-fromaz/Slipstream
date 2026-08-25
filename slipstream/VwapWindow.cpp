@@ -40,6 +40,23 @@ bool IsUserTradeRejected(const TradeResult result) noexcept {
            result == TradeResult::UserTradeRejected_ParticipationCap;
 }
 
+const char* TradeRejectionReason(const TradeResult result) noexcept {
+    switch (result) {
+    case TradeResult::UserTradeRejectedBand:
+        return "band_bps";
+    case TradeResult::UserTradeRejected_ParticipationCap:
+        return "participation_cap";
+    case TradeResult::NoOrder:
+    case TradeResult::MarketTradeRecorded:
+    case TradeResult::UserTradeAccepted:
+    case TradeResult::UserTradePartial_MaxQuantity:
+    case TradeResult::UserTradePartial_ParticipationCap:
+        return "not_rejected";
+    }
+
+    return "unknown";
+}
+
 VwapWindow::VwapWindow(const SlipstreamConfig& slipstream)
     : participation_cap(slipstream.participation_cap),
       vwap_window_ns(
@@ -96,6 +113,8 @@ TradeDecision VwapWindow::checkConstraints(TradePrint& trade_print) {
 
     resolveSide(trade_print);
 
+    const std::uint32_t submitted_qty{trade_print.qty};
+
     const __int128_t scaled_trade_price =
         static_cast<__int128_t>(trade_print.price) *
         band_denominator;
@@ -124,12 +143,12 @@ TradeDecision VwapWindow::checkConstraints(TradePrint& trade_print) {
         return {
             TradeResult::UserTradeRejectedBand,
             trade_print.side,
+            submitted_qty,
+            0,
         };
     }
 
-    TradeResult tradeResult_;
-
-    std::uint32_t submitted_qty{trade_print.qty};
+    TradeResult tradeResult_{TradeResult::UserTradeAccepted};
 
     if (trade_print.qty > max_qty) {
         trade_print.qty = max_qty;
@@ -162,6 +181,8 @@ TradeDecision VwapWindow::checkConstraints(TradePrint& trade_print) {
             return {
                 TradeResult::UserTradeRejected_ParticipationCap,
                 trade_print.side,
+                submitted_qty,
+                0,
             };
         }
 

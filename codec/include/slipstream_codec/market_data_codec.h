@@ -69,10 +69,6 @@ struct NewOrderMessage {
     std::int64_t limit_px{0};
 };
 
-using OrderEntryClientMessage = std::variant<
-    NewOrderMessage,
-    HeartbeatMessage,
-    SessionControlMessage>;
 
 enum class ExecStatus : std::uint8_t {
     ack = 0,
@@ -86,7 +82,7 @@ enum class RejectReason : std::uint8_t {
     risk = 1,
     price = 2,
     size = 3,
-    throttle = 4,
+  //  throttle = 4,
 };
 
 struct ExecReportMessage {
@@ -97,6 +93,12 @@ struct ExecReportMessage {
     std::int64_t avg_px{0};
     RejectReason reason_code{RejectReason::none};
 };
+
+using OrderEntryClientMessage = std::variant<
+    NewOrderMessage,
+    ExecReportMessage,
+    HeartbeatMessage,
+    SessionControlMessage>;
 
 enum class DecodeStatus {
     message_ready,

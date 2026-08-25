@@ -31,6 +31,9 @@ class Engine {
 
 
     private:
+        [[nodiscard]]
+        bool PushOutbound(
+            slipstream::codec::OrderEntryClientMessage outbound);
         const SlipstreamConfig& config_;
         TradeManager trade_manager;
         ExecutionReport execution_report_;

@@ -267,6 +267,8 @@ namespace slipstream {
 
                     if constexpr (std::is_same_v<Message, codec::NewOrderMessage>) {
                         frame.size = codec::EncodeNewOrder(value, frame.bytes);
+                    } else if constexpr (std::is_same_v<Message, codec::ExecReportMessage>) {
+                        frame.size = codec::EncodeExecReport(value, frame.bytes);
                     } else if constexpr (std::is_same_v<Message, codec::HeartbeatMessage>) {
                         frame.size = codec::EncodeHeartbeat(value, frame.bytes);
                     } else if constexpr (std::is_same_v<Message, codec::SessionControlMessage>) {

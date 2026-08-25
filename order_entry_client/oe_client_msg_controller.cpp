@@ -162,6 +162,16 @@ void OEClientMsgController::HandleMessage(
                     value.limit_px,
                     value.client_order_id);
             },
+            [this](const slipstream::codec::ExecReportMessage& value) {
+                logger_.info(
+                    "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ts_ns={}",
+                    value.client_order_id,
+                    static_cast<unsigned>(value.status),
+                    value.filled_qty,
+                    value.avg_px,
+                    static_cast<unsigned>(value.reason_code),
+                    value.ts_ns);
+            },
             [this](const slipstream::codec::HeartbeatMessage& value) {
                 logger_.info("Heartbeat ts_ns={}", value.ts_ns);
             },
