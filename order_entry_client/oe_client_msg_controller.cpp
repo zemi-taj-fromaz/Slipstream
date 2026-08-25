@@ -38,8 +38,7 @@ utils::ConnectionResult OEClientMsgController::Send(const MarketEvent& event) {
     return socket_.SendAll({buffer.data(), encoded_size});
 }
 
-utils::ConnectionResult OEClientMsgController::ProcessInboundUntil(
-    std::chrono::steady_clock::time_point deadline) {
+utils::ConnectionResult OEClientMsgController::ProcessInboundUntil(std::chrono::steady_clock::time_point deadline) {
     while (true) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {

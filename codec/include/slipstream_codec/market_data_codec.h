@@ -82,7 +82,7 @@ enum class RejectReason : std::uint8_t {
     risk = 1,
     price = 2,
     size = 3,
-  //  throttle = 4,
+    throttle = 4,
 };
 
 struct ExecReportMessage {
