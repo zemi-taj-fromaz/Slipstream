@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 
 namespace {
 
@@ -232,6 +233,7 @@ bool Engine::PushOutbound(
             return false;
         }
 
+        notify_egress();
         CpuRelax();
     }
 

@@ -6,6 +6,7 @@
 #include "message_processor.h"
 #include "replay_start.h"
 
+#include <array>
 #include <ios>
 #include <memory>
 #include <poll.h>
@@ -16,6 +17,7 @@
 #include <cstring>
 #include <type_traits>
 #include <variant>
+#include <vector>
 #include <utility>
 #include <spdlog/spdlog.h>
 
