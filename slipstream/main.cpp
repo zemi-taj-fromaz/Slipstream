@@ -3,8 +3,10 @@
 //
 
 #include "SlipstreamConfig.h"
+#include "Queues.h"
 
 #include <exception>
+#include <atomic>
 #include <charconv>
 #include <cstdint>
 #include <fstream>
@@ -139,11 +141,8 @@ int main(int argc, char* argv[]) {
 
     try {
         const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);
-
-        constexpr std::size_t queue_capacity = 4096;
-        rigtorp::SPSCQueue<MarketEvent> ingress{queue_capacity};
-        rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage> egress{
-            queue_capacity};
+        slipstream::MarketEventQueue ingress;
+        slipstream::OrderEntryQueue egress;
         std::atomic<std::uint64_t> ingress_generation{0};
 
         slipstream::NetworkManager network_manager{

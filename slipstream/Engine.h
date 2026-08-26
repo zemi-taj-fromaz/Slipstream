@@ -6,11 +6,9 @@
 #define SLIPSTREAM_ENGINE_H
 
 #include "SlipstreamConfig.h"
+#include "Queues.h"
 #include "ExecutionReport.h"
 #include "TradeManager.h"
-#include "slipstream_codec/market_data_codec.h"
-#include "rigtorp/SPSCQueue.h"
-#include "market_event.h"
 
 #include <atomic>
 #include <cstdint>
@@ -19,8 +17,8 @@
 class Engine {
     public:
     Engine(const SlipstreamConfig& slipstream,
-        rigtorp::SPSCQueue<MarketEvent>& in,
-        rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& out,
+        slipstream::MarketEventQueue& in,
+        slipstream::OrderEntryQueue& out,
         std::atomic<std::uint64_t>& ingress_generation,
         std::function<void()> notify_egress);
 
@@ -38,8 +36,8 @@ class Engine {
         TradeManager trade_manager;
         ExecutionReport execution_report_;
 
-        rigtorp::SPSCQueue<MarketEvent>& ingress;
-        rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& egress;
+        slipstream::MarketEventQueue& ingress;
+        slipstream::OrderEntryQueue& egress;
         std::atomic<std::uint64_t>& ingress_generation;
         std::function<void()> notify_egress;
 

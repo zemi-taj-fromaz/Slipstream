@@ -6,6 +6,7 @@ add_executable(slipstream
     ExecutionReport.h
     NetworkManager.cpp
     NetworkManager.h
+    Queues.h
     TradeManager.cpp
     TradeManager.h
     VwapWindow.cpp
@@ -16,7 +17,6 @@ target_link_libraries(slipstream
     PRIVATE
         slipstream_codec
         UTILS
-        SPSCQueue::SPSCQueue
         spdlog::spdlog
 )
 

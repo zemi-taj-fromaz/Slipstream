@@ -16,6 +16,7 @@
 #include <cstring>
 #include <type_traits>
 #include <variant>
+#include <utility>
 #include <spdlog/spdlog.h>
 
 namespace slipstream {
@@ -33,8 +34,8 @@ namespace slipstream {
 
     NetworkManager::NetworkManager(
         const SlipstreamConfig& config,
-        rigtorp::SPSCQueue<MarketEvent>& in,
-        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out,
+        MarketEventQueue& in,
+        OrderEntryQueue& out,
         std::atomic<std::uint64_t>& generation)
         : NetworkManager(config) {
         ingress = &in;
@@ -183,7 +184,7 @@ namespace slipstream {
                     }
 
                     if (ingress != nullptr) {
-                        if (!ingress->try_push(recv_message)) {
+                        if (!ingress->push(recv_message)) {
                             throw std::runtime_error(
                                 "failed to enqueue MarketEvent");
                         }
@@ -258,7 +259,8 @@ namespace slipstream {
             return;
         }
 
-        while (const auto* message = egress->front()) {
+        codec::OrderEntryClientMessage message{};
+        while (egress->pop(message)) {
             EncodedFrame frame{};
 
             std::visit(
@@ -275,10 +277,9 @@ namespace slipstream {
                         frame.size = codec::EncodeSessionControl(value, frame.bytes);
                     }
                 },
-                *message);
+                message);
 
             send_queue.push_back(std::move(frame));
-            egress->pop();
         }
     }
 

@@ -12,6 +12,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -49,8 +50,8 @@ slipstream::codec::RejectReason ToRejectReason(
 } // namespace
 
 Engine::Engine(const SlipstreamConfig& slipstream,
-               rigtorp::SPSCQueue<MarketEvent>& in,
-               rigtorp::SPSCQueue<slipstream::codec::OrderEntryClientMessage>& out,
+               slipstream::MarketEventQueue& in,
+               slipstream::OrderEntryQueue& out,
                std::atomic<std::uint64_t>& generation,
                std::function<void()> egress_notifier)
     : config_(slipstream),
@@ -62,162 +63,158 @@ Engine::Engine(const SlipstreamConfig& slipstream,
 
 void Engine::Run() {
     while (running.load(std::memory_order_relaxed)) {
-        if (MarketEvent* event = ingress.front()) {
-            const TradeManagerResult manager_result =
-                trade_manager.Push(*event);
+        MarketEvent event{};
+        if (!ingress.pop(event)) {
+            const std::uint64_t observed = ingress_generation.load(
+                std::memory_order_acquire);
 
-            if (const auto* market =
-                    std::get_if<MarketUpdateResult>(&manager_result)) {
-                execution_report_.market_qty +=
-                    market->market_qty_delta;
-                execution_report_.market_pq_sum +=
-                    market->market_pq_delta;
-
-                ingress.pop();
+            if (!ingress.pop(event)) {
+                if (running.load(std::memory_order_acquire)) {
+                    ingress_generation.wait(
+                        observed,
+                        std::memory_order_acquire);
+                }
                 continue;
             }
+        }
 
-            const auto& user = std::get<UserTradeResult>(manager_result);
-            const TradeDecision& decision = user.decision;
-            const TradeResult result = decision.result;
-            const auto* trade = std::get_if<Trade>(&event->payload);
-            if (trade == nullptr) {
-                throw std::logic_error(
-                    "user trade result produced for a non-trade event");
-            }
+        const TradeManagerResult manager_result = trade_manager.Push(event);
 
-            execution_report_.submitted_qty += decision.submitted_qty;
-
-            const bool rejected = IsUserTradeRejected(result);
-            const bool partial =
-                result == TradeResult::UserTradePartial_MaxQuantity ||
-                result == TradeResult::UserTradePartial_ParticipationCap;
-            const bool executed = !rejected && decision.executed_qty != 0;
-
-            if (executed) {
-                const __int128_t pq =
-                    static_cast<__int128_t>(trade->price) * decision.executed_qty;
-                execution_report_.executed_qty += decision.executed_qty;
-                execution_report_.executed_pq_sum += pq;
-
-                if (decision.side == TradeSide::Buy) {
-                    execution_report_.buy_qty += decision.executed_qty;
-                    execution_report_.buy_pq_sum += pq;
-                } else if (decision.side == TradeSide::Sell) {
-                    execution_report_.sell_qty += decision.executed_qty;
-                    execution_report_.sell_pq_sum += pq;
-                } else {
-                    throw std::logic_error(
-                        "executed user trade has unknown side");
-                }
-            }
-
-            if (IsUserTradeResult(result)) {
-                if (decision.side == TradeSide::Unknown) {
-                    throw std::logic_error(
-                        "user trade decision has unknown side");
-                }
-
-                if (rejected) {
-                    std::cout
-                        << "[slipstream] Rejecting NewOrder reason="
-                        << TradeRejectionReason(result)
-                        << " trade_id=" << trade->id
-                        << " symbol=" << SymbolText(
-                            event->symbol,
-                            sizeof(event->symbol))
-                        << " qty=" << trade->qty
-                        << " price=" << trade->price
-                        << " vwap=" << user.rolling_vwap
-                        << " band_bps=" << config_.band_bps
-                        << '\n'
-                        << std::flush;
-                }
-
-
-                const std::uint64_t client_order_id = next_client_order_id++;
-
-                slipstream::codec::NewOrderMessage order{
-                    .client_order_id = client_order_id,
-                    .status = rejected
-                        ? slipstream::codec::NewOrderStatus::rejected
-                        : slipstream::codec::NewOrderStatus::accepted,
-                    .ts_ns = event->ts,
-                    .trade_id = trade->id,
-
-                    .side = decision.side == TradeSide::Sell
-                        ? slipstream::codec::OrderSide::sell
-                        : slipstream::codec::OrderSide::buy,
-                    .qty = decision.submitted_qty,
-                    .limit_px = trade->price,
-                };
-                std::memcpy(order.symbol, event->symbol, sizeof(order.symbol));
-
-                if (!PushOutbound(order)) {
-                    return;
-                }
-
-                const slipstream::codec::RejectReason reason =
-                    ToRejectReason(result);
-
-                if (rejected) {
-                    const slipstream::codec::ExecReportMessage reject_report{
-                        .client_order_id = client_order_id,
-                        .ts_ns = event->ts,
-                        .status = slipstream::codec::ExecStatus::reject,
-                        .filled_qty = 0,
-                        .avg_px = 0,
-                        .reason_code = reason,
-                    };
-
-                    if (!PushOutbound(reject_report)) {
-                        return;
-                    }
-                } else {
-                    const slipstream::codec::ExecReportMessage ack_report{
-                        .client_order_id = client_order_id,
-                        .ts_ns = event->ts,
-                        .status = slipstream::codec::ExecStatus::ack,
-                        .filled_qty = 0,
-                        .avg_px = 0,
-                        .reason_code = slipstream::codec::RejectReason::none,
-                    };
-
-                    if (!PushOutbound(ack_report)) {
-                        return;
-                    }
-
-                    const slipstream::codec::ExecReportMessage final_report{
-                        .client_order_id = client_order_id,
-                        .ts_ns = event->ts,
-                        .status = partial
-                            ? slipstream::codec::ExecStatus::partial
-                            : slipstream::codec::ExecStatus::fill,
-                        .filled_qty = decision.executed_qty,
-                        .avg_px = trade->price,
-                        .reason_code = reason,
-                    };
-
-                    if (!PushOutbound(final_report)) {
-                        return;
-                    }
-                }
-
-                notify_egress();
-            }
-
-            ingress.pop();
+        if (const auto* market =
+                std::get_if<MarketUpdateResult>(&manager_result)) {
+            execution_report_.market_qty +=
+                market->market_qty_delta;
+            execution_report_.market_pq_sum +=
+                market->market_pq_delta;
             continue;
         }
 
-        const std::uint64_t observed = ingress_generation.load(
-            std::memory_order_acquire);
+        const auto& user = std::get<UserTradeResult>(manager_result);
+        const TradeDecision& decision = user.decision;
+        const TradeResult result = decision.result;
+        const auto* trade = std::get_if<Trade>(&event.payload);
+        if (trade == nullptr) {
+            throw std::logic_error(
+                "user trade result produced for a non-trade event");
+        }
 
-        if (ingress.front() == nullptr &&
-            running.load(std::memory_order_acquire)) {
-            ingress_generation.wait(
-                observed,
-                std::memory_order_acquire);
+        execution_report_.submitted_qty += decision.submitted_qty;
+
+        const bool rejected = IsUserTradeRejected(result);
+        const bool partial =
+            result == TradeResult::UserTradePartial_MaxQuantity ||
+            result == TradeResult::UserTradePartial_ParticipationCap;
+        const bool executed = !rejected && decision.executed_qty != 0;
+
+        if (executed) {
+            const __int128_t pq =
+                static_cast<__int128_t>(trade->price) * decision.executed_qty;
+            execution_report_.executed_qty += decision.executed_qty;
+            execution_report_.executed_pq_sum += pq;
+
+            if (decision.side == TradeSide::Buy) {
+                execution_report_.buy_qty += decision.executed_qty;
+                execution_report_.buy_pq_sum += pq;
+            } else if (decision.side == TradeSide::Sell) {
+                execution_report_.sell_qty += decision.executed_qty;
+                execution_report_.sell_pq_sum += pq;
+            } else {
+                throw std::logic_error(
+                    "executed user trade has unknown side");
+            }
+        }
+
+        if (IsUserTradeResult(result)) {
+            if (decision.side == TradeSide::Unknown) {
+                throw std::logic_error(
+                    "user trade decision has unknown side");
+            }
+
+            if (rejected) {
+                std::cout
+                    << "[slipstream] Rejecting NewOrder reason="
+                    << TradeRejectionReason(result)
+                    << " trade_id=" << trade->id
+                    << " symbol=" << SymbolText(
+                        event.symbol,
+                        sizeof(event.symbol))
+                    << " qty=" << trade->qty
+                    << " price=" << trade->price
+                    << " vwap=" << user.rolling_vwap
+                    << " band_bps=" << config_.band_bps
+                    << '\n'
+                    << std::flush;
+            }
+
+            const std::uint64_t client_order_id = next_client_order_id++;
+
+            slipstream::codec::NewOrderMessage order{
+                .client_order_id = client_order_id,
+                .status = rejected
+                    ? slipstream::codec::NewOrderStatus::rejected
+                    : slipstream::codec::NewOrderStatus::accepted,
+                .ts_ns = event.ts,
+                .trade_id = trade->id,
+
+                .side = decision.side == TradeSide::Sell
+                    ? slipstream::codec::OrderSide::sell
+                    : slipstream::codec::OrderSide::buy,
+                .qty = decision.submitted_qty,
+                .limit_px = trade->price,
+            };
+            std::memcpy(order.symbol, event.symbol, sizeof(order.symbol));
+
+            if (!PushOutbound(order)) {
+                return;
+            }
+
+            const slipstream::codec::RejectReason reason =
+                ToRejectReason(result);
+
+            if (rejected) {
+                const slipstream::codec::ExecReportMessage reject_report{
+                    .client_order_id = client_order_id,
+                    .ts_ns = event.ts,
+                    .status = slipstream::codec::ExecStatus::reject,
+                    .filled_qty = 0,
+                    .avg_px = 0,
+                    .reason_code = reason,
+                };
+
+                if (!PushOutbound(reject_report)) {
+                    return;
+                }
+            } else {
+                const slipstream::codec::ExecReportMessage ack_report{
+                    .client_order_id = client_order_id,
+                    .ts_ns = event.ts,
+                    .status = slipstream::codec::ExecStatus::ack,
+                    .filled_qty = 0,
+                    .avg_px = 0,
+                    .reason_code = slipstream::codec::RejectReason::none,
+                };
+
+                if (!PushOutbound(ack_report)) {
+                    return;
+                }
+
+                const slipstream::codec::ExecReportMessage final_report{
+                    .client_order_id = client_order_id,
+                    .ts_ns = event.ts,
+                    .status = partial
+                        ? slipstream::codec::ExecStatus::partial
+                        : slipstream::codec::ExecStatus::fill,
+                    .filled_qty = decision.executed_qty,
+                    .avg_px = trade->price,
+                    .reason_code = reason,
+                };
+
+                if (!PushOutbound(final_report)) {
+                    return;
+                }
+            }
+
+            notify_egress();
         }
     }
 }
@@ -230,7 +227,7 @@ void Engine::Stop() noexcept {
 
 bool Engine::PushOutbound(
     slipstream::codec::OrderEntryClientMessage outbound) {
-    while (!egress.try_push(outbound)) {
+    while (!egress.push(outbound)) {
         if (!running.load(std::memory_order_acquire)) {
             return false;
         }

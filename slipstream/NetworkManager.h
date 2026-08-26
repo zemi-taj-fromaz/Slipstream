@@ -6,6 +6,7 @@
 #define SLIPSTREAM_NETWORKMANAGER_H
 
 #include "SlipstreamConfig.h"
+#include "Queues.h"
 #include "socket.h"
 
 #include <queue>
@@ -14,7 +15,7 @@
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
 #include <unistd.h>
-#include <rigtorp/SPSCQueue.h>
+
 
 class IMsgController;
 
@@ -24,8 +25,8 @@ namespace slipstream {
         explicit NetworkManager(const SlipstreamConfig& config);
         NetworkManager(
             const SlipstreamConfig& config,
-            rigtorp::SPSCQueue<MarketEvent>& in,
-            rigtorp::SPSCQueue<codec::OrderEntryClientMessage>& out,
+            MarketEventQueue& in,
+            OrderEntryQueue& out,
             std::atomic<std::uint64_t>& ingress_generation);
         ~NetworkManager();
 
@@ -55,8 +56,8 @@ namespace slipstream {
         const SlipstreamConfig& config_;
         bool alive{true};
 
-        rigtorp::SPSCQueue<MarketEvent>* ingress{nullptr};
-        rigtorp::SPSCQueue<codec::OrderEntryClientMessage>* egress{nullptr};
+        MarketEventQueue* ingress{nullptr};
+        OrderEntryQueue* egress{nullptr};
         std::atomic<std::uint64_t>* ingress_generation{nullptr};
 
         codec::ServerSideDecoder md_decoder{};

@@ -10,6 +10,7 @@ add_library(UTILS STATIC
     replay/src/replay_start.cpp
     socket/include/socket.h
     socket/src/socket.cpp
+        concurrent_queues/spsc_queue.h
 )
 
 target_include_directories(UTILS
@@ -18,6 +19,7 @@ target_include_directories(UTILS
         ${CMAKE_CURRENT_SOURCE_DIR}/csv_parser/include
         ${CMAKE_CURRENT_SOURCE_DIR}/replay/include
         ${CMAKE_CURRENT_SOURCE_DIR}/socket/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/concurrent_queues
 )
 
 target_compile_features(UTILS PUBLIC cxx_std_23)
