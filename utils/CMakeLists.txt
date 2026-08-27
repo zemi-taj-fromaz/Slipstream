@@ -11,6 +11,7 @@ add_library(UTILS STATIC
     socket/include/socket.h
     socket/src/socket.cpp
         concurrent_queues/spsc_queue.h
+        socket/include/udp_socket.h
 )
 
 target_include_directories(UTILS
