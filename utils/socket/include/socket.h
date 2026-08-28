@@ -26,6 +26,12 @@ namespace utils {
         PeerDisconnected
     };
 
+    enum class SockType : std::uint8_t {
+        Udp,
+        Tcp
+    };
+
+    template <SockType type>
     class Socket {
     public:
         Socket();
@@ -40,24 +46,24 @@ namespace utils {
         void SetReuseAddress(bool enabled = true);
         void SetReceiveBufferSize(int size);
         void SetSendBufferSize(int size);
-        void SetTcpNoDelay(bool enabled = true);
+
         void Bind(std::uint16_t port);
         void Bind(const char* address, std::uint16_t port);
-        void Listen(int backlog = 8); // waits for connection
-        [[nodiscard]]
-        Socket Accept();
 
-        void Connect(const char* address, std::uint16_t port);
+        void SetTcpNoDelay(bool enabled = true) requires (type == SockType::Tcp);
+        void Listen(int backlog = 8) requires (type == SockType::Tcp);
+        [[nodiscard]] Socket Accept() requires (type == SockType::Tcp);
+        void Connect(const char* address, std::uint16_t port) requires (type == SockType::Tcp);
+        ConnectionResult SendAll(std::span<const std::byte> bytes) requires (type == SockType::Tcp);
 
-        ssize_t Recv(std::span<std::byte> buffer);
-        ConnectionResult SendAll(std::span<const std::byte> bytes);
+        ssize_t Recv(std::span<std::byte> buffer) requires (type == SockType::Tcp);
+        ssize_t RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp);
+
         void Shutdown(int how);
 
-        [[nodiscard]]
-        int NativeHandle() const noexcept {
+        [[nodiscard]] int NativeHandle() const noexcept {
             return fd;
         }
-
         bool IsValid() const noexcept;
     private:
         void SetSockOption(int level, int option, int value);
@@ -65,24 +71,35 @@ namespace utils {
         int fd{-1};
     };
 
-    inline Socket::Socket() {
-        fd = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    template <SockType type>
+    Socket<type>::Socket() {
+        int socket_type{};
+        if constexpr (type == SockType::Tcp) {
+            socket_type = SOCK_STREAM;
+        } else if constexpr (type == SockType::Udp) {
+            socket_type = SOCK_DGRAM;
+        }
+
+        fd = ::socket(AF_INET, socket_type | SOCK_CLOEXEC, 0);
         if (fd == -1) {
             throw std::runtime_error("socket() failed");
         }
     }
 
-    inline Socket::~Socket() {
+    template <SockType type>
+    Socket<type>::~Socket() {
         if (IsValid()) {
             ::close(fd);
         }
     }
 
-    inline Socket::Socket(Socket&& other) noexcept {
+    template <SockType type>
+    Socket<type>::Socket(Socket&& other) noexcept {
         fd = std::exchange(other.fd, -1);
     }
 
-    inline Socket& Socket::operator=(Socket&& other) noexcept {
+    template <SockType type>
+    Socket<type>& Socket<type>::operator=(Socket&& other) noexcept {
         if (this != &other) {
             if (IsValid()) {
                 ::close(fd);
@@ -94,11 +111,36 @@ namespace utils {
         return *this;
     }
 
-    inline void Socket::Bind(std::uint16_t port) {
+    template <SockType type>
+    void Socket<type>::SetReuseAddress(bool enabled) {
+        SetSockOption(SOL_SOCKET, SO_REUSEADDR, enabled ? 1 : 0);
+    }
+
+    template <SockType type>
+    void Socket<type>::SetReceiveBufferSize(int size) {
+        if (size <= 0) {
+            throw std::invalid_argument("receive buffer size must be positive");
+        }
+
+        SetSockOption(SOL_SOCKET, SO_RCVBUF, size);
+    }
+
+    template <SockType type>
+    void Socket<type>::SetSendBufferSize(int size) {
+        if (size <= 0) {
+            throw std::invalid_argument("send buffer size must be positive");
+        }
+
+        SetSockOption(SOL_SOCKET, SO_SNDBUF, size);
+    }
+
+    template <SockType type>
+    void Socket<type>::Bind(std::uint16_t port) {
         Bind("0.0.0.0", port);
     }
 
-    inline void Socket::Bind(const char* address, std::uint16_t port) {
+    template <SockType type>
+    void Socket<type>::Bind(const char* address, std::uint16_t port) {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
@@ -127,51 +169,21 @@ namespace utils {
         }
     }
 
-    inline void Socket::SetSockOption(int level, int option, int value) {
-        const int result = ::setsockopt(
-            fd,
-            level,
-            option,
-            &value,
-            sizeof(value));
-
-        if (result == -1) {
-            throw std::runtime_error("setsockopt failed");
-        }
-    }
-
-    inline void Socket::SetReuseAddress(bool enabled) {
-        SetSockOption(SOL_SOCKET, SO_REUSEADDR, enabled ? 1 : 0);
-    }
-
-    inline void Socket::SetReceiveBufferSize(int size) {
-        if (size <= 0) {
-            throw std::invalid_argument("receive buffer size must be positive");
-        }
-
-        SetSockOption(SOL_SOCKET, SO_RCVBUF, size);
-    }
-
-    inline void Socket::SetSendBufferSize(int size) {
-        if (size <= 0) {
-            throw std::invalid_argument("send buffer size must be positive");
-        }
-
-        SetSockOption(SOL_SOCKET, SO_SNDBUF, size);
-    }
-
-    inline void Socket::SetTcpNoDelay(bool enabled) {
+    template <SockType type>
+    void Socket<type>::SetTcpNoDelay(bool enabled) requires (type == SockType::Tcp) {
         SetSockOption(IPPROTO_TCP, TCP_NODELAY, enabled ? 1 : 0);
     }
 
-    inline void Socket::Listen(int backlog) {
+    template <SockType type>
+    void Socket<type>::Listen(int backlog) requires (type == SockType::Tcp) {
         const int result = ::listen(fd, backlog);
         if (result == -1) {
-            throw std::runtime_error("bind() failed");
+            throw std::runtime_error("listen() failed");
         }
     }
 
-    inline Socket Socket::Accept() {
+    template <SockType type>
+    Socket<type> Socket<type>::Accept() requires (type == SockType::Tcp) {
         const int connected_fd = ::accept(fd, nullptr, nullptr);
         if (connected_fd == -1) {
             throw std::runtime_error("accept() failed");
@@ -180,7 +192,8 @@ namespace utils {
         return Socket(connected_fd);
     }
 
-    inline void Socket::Connect(const char* address, std::uint16_t port) {
+    template <SockType type>
+    void Socket<type>::Connect(const char* address, std::uint16_t port) requires (type == SockType::Tcp) {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
@@ -202,11 +215,19 @@ namespace utils {
         }
     }
 
-    inline ssize_t Socket::Recv(std::span<std::byte> buffer) {
+    template <SockType type>
+    ssize_t Socket<type>::Recv(std::span<std::byte> buffer) requires (type == SockType::Tcp) {
         return ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
     }
 
-    inline ConnectionResult Socket::SendAll(std::span<const std::byte> bytes) {
+    template <SockType type>
+    ssize_t Socket<type>::RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp) {
+        return ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
+    }
+
+    template <SockType type>
+    ConnectionResult Socket<type>::SendAll(std::span<const std::byte> bytes)
+        requires (type == SockType::Tcp) {
         std::size_t offset{};
 
         while (offset < bytes.size()) {
@@ -248,20 +269,40 @@ namespace utils {
         return ConnectionResult::Complete;
     }
 
-    inline void Socket::Shutdown(int how) {
+    template <SockType type>
+    void Socket<type>::Shutdown(int how) {
         const int result = ::shutdown(fd, how);
         if (result == -1) {
             throw std::runtime_error("shutdown() failed");
         }
     }
 
-    inline bool Socket::IsValid() const noexcept {
+    template <SockType type>
+    bool Socket<type>::IsValid() const noexcept {
         return fd != -1;
     }
 
-    inline Socket::Socket(int existing) noexcept {
+    template <SockType type>
+    void Socket<type>::SetSockOption(int level, int option, int value) {
+        const int result = ::setsockopt(
+            fd,
+            level,
+            option,
+            &value,
+            sizeof(value));
+
+        if (result == -1) {
+            throw std::runtime_error("setsockopt failed");
+        }
+    }
+
+    template <SockType type>
+    Socket<type>::Socket(int existing) noexcept {
         fd = existing;
     }
+
+    using TcpSocket = Socket<SockType::Tcp>;
+    using UdpSocket = Socket<SockType::Udp>;
 }
 
 #endif //SLIPSTREAM_SOCKET_H

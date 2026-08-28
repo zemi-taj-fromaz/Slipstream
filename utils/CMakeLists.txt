@@ -9,9 +9,7 @@ add_library(UTILS STATIC
     replay/include/replay_start.h
     replay/src/replay_start.cpp
     socket/include/socket.h
-    socket/src/socket.cpp
         concurrent_queues/spsc_queue.h
-        socket/include/udp_socket.h
 )
 
 target_include_directories(UTILS
