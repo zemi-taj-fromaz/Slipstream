@@ -346,7 +346,7 @@ DecodeResult DecodeSessionControl(
     return {DecodeStatus::message_ready, frame_size};
 }
 
-StreamDecodeResult ServerSideDecoder::Decode(
+StreamDecodeResult MarketEventDecoder::Decode(
     std::span<const std::byte> input,
     std::vector<MarketEvent>& output) {
     pending_.insert(pending_.end(), input.begin(), input.end());
@@ -384,7 +384,49 @@ StreamDecodeResult ServerSideDecoder::Decode(
     };
 }
 
-std::size_t ServerSideDecoder::BufferedBytes() const noexcept {
+std::size_t MarketEventDecoder::BufferedBytes() const noexcept {
+    return pending_.size();
+}
+
+StreamDecodeResult SessionControlDecoder::Decode(
+    std::span<const std::byte> input,
+    std::vector<SessionControlMessage>& output) {
+    pending_.insert(pending_.end(), input.begin(), input.end());
+
+    std::size_t messages_decoded = 0;
+    while (!pending_.empty()) {
+        SessionControlMessage message{};
+        const DecodeResult result = DecodeSessionControl(pending_, message);
+
+        if (result.status == DecodeStatus::need_more_data) {
+            return {
+                messages_decoded == 0
+                    ? DecodeStatus::need_more_data
+                    : DecodeStatus::message_ready,
+                messages_decoded,
+            };
+        }
+
+        if (result.status == DecodeStatus::error) {
+            return {DecodeStatus::error, messages_decoded};
+        }
+
+        output.push_back(message);
+        ++messages_decoded;
+        pending_.erase(
+            pending_.begin(),
+            pending_.begin() + static_cast<std::ptrdiff_t>(result.bytes_consumed));
+    }
+
+    return {
+        messages_decoded == 0
+            ? DecodeStatus::need_more_data
+            : DecodeStatus::message_ready,
+        messages_decoded,
+    };
+}
+
+std::size_t SessionControlDecoder::BufferedBytes() const noexcept {
     return pending_.size();
 }
 

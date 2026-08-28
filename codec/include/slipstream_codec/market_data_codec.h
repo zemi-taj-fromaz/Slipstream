@@ -140,11 +140,20 @@ struct StreamDecodeResult {
     std::span<const std::byte> input,
     SessionControlMessage& output);
 
-class ServerSideDecoder {
+class MarketEventDecoder {
 public:
-    [[nodiscard]] StreamDecodeResult Decode(
-        std::span<const std::byte> input,
-        std::vector<MarketEvent>& output);
+    [[nodiscard]] StreamDecodeResult Decode(std::span<const std::byte> input, std::vector<MarketEvent>& output);
+
+    [[nodiscard]] std::size_t BufferedBytes() const noexcept;
+
+private:
+    std::vector<std::byte> pending_;
+};
+
+
+class SessionControlDecoder {
+public:
+    [[nodiscard]] StreamDecodeResult Decode(std::span<const std::byte> input, std::vector<SessionControlMessage>& output);
 
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 

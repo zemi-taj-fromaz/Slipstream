@@ -41,18 +41,17 @@ namespace slipstream {
 
         void resetWakeNotif();
         void drainEgress();
-        void flushSendQueue(utils::Socket& oe_client);
+        void flushSendQueue(utils::Socket<utils::SockType::Tcp>& oe_client);
         void markOeActivity();
         void checkHeartbeat();
         void queueHeartbeat();
 
-        void recvMarketEvent(
-            utils::Socket& client,
-            codec::ServerSideDecoder& decoder,
-            IMsgController& controller);
+        void recvMarketEvent(utils::Socket<utils::SockType::Tcp>& client, codec::MarketEventDecoder& decoder, IMsgController& controller);
+        void recvSessionControl(utils::Socket<utils::SockType::Udp>& client, IMsgController& controller);
 
-        utils::Socket md_listener{};
-        utils::Socket oe_listener{};
+        utils::Socket<utils::SockType::Tcp> md_listener{};
+        utils::Socket<utils::SockType::Tcp> oe_listener{};
+        utils::Socket<utils::SockType::Udp> session_control_listener{};
         const SlipstreamConfig& config_;
         bool alive{true};
 
@@ -60,8 +59,9 @@ namespace slipstream {
         OrderEntryQueue* egress{nullptr};
         std::atomic<std::uint64_t>* ingress_generation{nullptr};
 
-        codec::ServerSideDecoder md_decoder{};
-        codec::ServerSideDecoder oe_decoder{};
+        codec::MarketEventDecoder md_decoder{};
+        codec::MarketEventDecoder oe_decoder{};
+       // codec::SessionControlDecoder session_control_decoder{};
 
         std::deque<EncodedFrame> send_queue;
         int wake_fd{-1};

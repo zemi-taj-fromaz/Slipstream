@@ -89,8 +89,12 @@ namespace slipstream {
         oe_listener.Bind(config_.oe_host.c_str(), config_.oe_port);
         oe_listener.Listen();
 
-        utils::Socket md_client = md_listener.Accept();
-        utils::Socket oe_client = oe_listener.Accept();
+        session_control_listener.SetReuseAddress();
+        session_control_listener.SetReceiveBufferSize(receive_buffer_size);
+        session_control_listener.Bind("127.0.0.1", 9099);
+
+        utils::Socket<utils::SockType::Tcp> md_client = md_listener.Accept();
+        utils::Socket<utils::SockType::Tcp> oe_client = oe_listener.Accept();
         oe_client.SetTcpNoDelay();
         oe_client.SetSendBufferSize(send_buffer_size);
 
@@ -99,9 +103,10 @@ namespace slipstream {
         std::size_t md_index = 0;
         std::size_t oe_index = 1;
         std::size_t wake_index = 2;
+        std::size_t session_control_index = 3;
 
 
-        std::array<pollfd, 3> poll_fds{{
+        std::array<pollfd, 4> poll_fds{{
             {
                 .fd = md_client.NativeHandle(),
                 .events = POLLIN,
@@ -116,6 +121,11 @@ namespace slipstream {
                 .fd = wake_fd,
                 .events = POLLIN,
                 .revents = 0
+            },
+        {
+                .fd = session_control_listener.NativeHandle(),
+                .events = POLLIN,
+                .revents = 0
             }
         }};
 
@@ -123,6 +133,8 @@ namespace slipstream {
             poll_fds[md_index].events = POLLIN;
             poll_fds[oe_index].events = POLLIN;
             poll_fds[wake_index].events = POLLIN;
+            poll_fds[session_control_index].events = POLLIN;
+
 
             if (!send_queue.empty()) { poll_fds[oe_index].events |= POLLOUT; }
 
@@ -154,6 +166,9 @@ namespace slipstream {
             if (poll_fds[oe_index].revents & POLLIN) {
                 recvMarketEvent(oe_client, oe_decoder, *oe_controller);
             }
+            if (poll_fds[session_control_index].revents & POLLIN) {
+                recvSessionControl(session_control_listener, *);
+            }
 
             if (poll_fds[oe_index].revents & POLLOUT) {
                 flushSendQueue(oe_client);
@@ -164,8 +179,8 @@ namespace slipstream {
     }
 
     void NetworkManager::recvMarketEvent(
-        utils::Socket& client,
-        codec::ServerSideDecoder& decoder,
+        utils::Socket<utils::SockType::Tcp>& client,
+        codec::MarketEventDecoder& decoder,
         IMsgController& controller) {
 
         std::array<std::byte, 4096> recv_buffer;
@@ -208,7 +223,7 @@ namespace slipstream {
             }
 
             if (recvd == 0) {
-                // MD client closed its connection cleanly.
+                //client closed its connection cleanly.
                 alive = false;
                 return;
             }
@@ -217,11 +232,58 @@ namespace slipstream {
                 continue;
             }
 
-            if (errno == EAGAIN ||
-                errno == EWOULDBLOCK) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // We drained everything currently available.
                 return;
+            }
+
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "market-data recv() failed");
+        }
+    }
+
+    void NetworkManager::recvSessionControl(
+        utils::Socket<utils::SockType::Udp>& client,
+        IMsgController& controller) {
+
+        std::array<std::byte, 64> recv_buffer;
+
+        while (true) {
+            const ::ssize_t recvd = client.RecvDatagram(recv_buffer);
+            if (recvd > 0) {
+                std::string_view command{
+                    reinterpret_cast<const char*>(recv_buffer.data()),
+                    static_cast<std::size_t>(recvd)};
+
+                if (command == "HALT") {
+                    queueSessionControl(codec::SessionState::halt);
+                    u SEND_QUEUE UBACI MENS CINI
+                } else if (command == "OPEN") {
+                    queueSessionControl(codec::SessionState::open);
+                } else if (command == "CLOSE") {
+                    queueSessionControl(codec::SessionState::close);
+                } else {
+                    std::cout << "[slipstream] Unknown session command: "
+                              << command << '\n';
                 }
+
+                continue;
+            }
+
+            if (recvd == 0) {
+                continue;
+            }
+            // received == -1
+            if (errno == EINTR) {
+                continue;
+            }
+
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // We drained everything currently available.
+                return;
+            }
 
             throw std::system_error(
                 errno,
@@ -285,7 +347,7 @@ namespace slipstream {
         }
     }
 
-    void NetworkManager::flushSendQueue(utils::Socket& oe_client) {
+    void NetworkManager::flushSendQueue(utils::Socket<utils::SockType::Tcp>& oe_client) {
         while (!send_queue.empty()) {
             EncodedFrame& frame = send_queue.front();
             if (oe_client.SendAll(frame.remainingBytes()) ==
