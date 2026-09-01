@@ -31,6 +31,14 @@ OEClientMsgController::OEClientMsgController(
 }
 
 utils::ConnectionResult OEClientMsgController::Send(const MarketEvent& event) {
+    if (sessionState == slipstream::codec::SessionState::halt) {
+        return utils::ConnectionResult::Complete;
+    }
+
+    if (sessionState == slipstream::codec::SessionState::close) {
+        return utils::ConnectionResult::PeerDisconnected;
+    }
+
     std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
     const std::size_t encoded_size =
         slipstream::codec::EncodeMarketEvent(event, buffer);
@@ -116,6 +124,10 @@ utils::ConnectionResult OEClientMsgController::ReceiveAvailable() {
                 HandleMessage(message);
             }
 
+            if (sessionState == slipstream::codec::SessionState::close) {
+                return utils::ConnectionResult::PeerDisconnected;
+            }
+
             continue;
         }
 
@@ -173,6 +185,7 @@ void OEClientMsgController::HandleMessage(
                 logger_.info("Heartbeat ts_ns={}", value.ts_ns);
             },
             [this](const slipstream::codec::SessionControlMessage& value) {
+                sessionState = value.state;
                 logger_.info(
                     "SessionControl state={} ts_ns={}",
                     static_cast<unsigned>(value.state),

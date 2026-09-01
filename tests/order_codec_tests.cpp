@@ -259,15 +259,20 @@ TEST(ClientSideDecoder, DecodesNewOrderThenPartialHeartbeat) {
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
-TEST(ClientSideDecoder, RejectsOptionalExecReportForNow) {
-    const auto frame = Encode(MakeExecReport());
+TEST(ClientSideDecoder, DecodesExecReport) {
+    const ExecReportMessage expected = MakeExecReport();
+    const auto frame = Encode(expected);
     ClientSideDecoder decoder;
     std::vector<OrderEntryClientMessage> decoded;
 
     const auto result = decoder.Decode(frame, decoded);
 
-    EXPECT_EQ(result.status, DecodeStatus::error);
-    EXPECT_TRUE(decoded.empty());
+    ASSERT_EQ(result.status, DecodeStatus::message_ready);
+    ASSERT_EQ(result.messages_decoded, 1U);
+    ASSERT_EQ(decoded.size(), 1U);
+    ASSERT_TRUE(std::holds_alternative<ExecReportMessage>(decoded.front()));
+    ExpectSame(expected, std::get<ExecReportMessage>(decoded.front()));
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
 } // namespace
