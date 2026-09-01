@@ -45,9 +45,10 @@ namespace slipstream {
         void markOeActivity();
         void checkHeartbeat();
         void queueHeartbeat();
+        void queueSessionControl(codec::SessionState state);
 
         void recvMarketEvent(utils::Socket<utils::SockType::Tcp>& client, codec::MarketEventDecoder& decoder, IMsgController& controller);
-        void recvSessionControl(utils::Socket<utils::SockType::Udp>& client, IMsgController& controller);
+        void recvSessionControl(utils::Socket<utils::SockType::Udp>& client);
 
         utils::Socket<utils::SockType::Tcp> md_listener{};
         utils::Socket<utils::SockType::Tcp> oe_listener{};

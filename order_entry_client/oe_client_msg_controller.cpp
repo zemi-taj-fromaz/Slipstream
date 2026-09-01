@@ -45,10 +45,8 @@ utils::ConnectionResult OEClientMsgController::ProcessInboundUntil(std::chrono::
             return utils::ConnectionResult::Complete;
         }
 
-        const auto timeout_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                deadline - now)
-                .count();
+        const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+
         poll_descriptor_.events = POLLIN;
         poll_descriptor_.revents = 0;
 

@@ -226,8 +226,7 @@ void Engine::Stop() noexcept {
     ingress_generation.notify_one();
 }
 
-bool Engine::PushOutbound(
-    slipstream::codec::OrderEntryClientMessage outbound) {
+bool Engine::PushOutbound(slipstream::codec::OrderEntryClientMessage outbound) {
     while (!egress.push(outbound)) {
         if (!running.load(std::memory_order_acquire)) {
             return false;

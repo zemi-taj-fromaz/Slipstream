@@ -30,7 +30,9 @@ private:
     void HandleMessage(
         const slipstream::codec::OrderEntryClientMessage& message);
 
-    utils::Socket socket_;
+    slipstream::codec::SessionState sessionState{slipstream::codec::SessionState::open};
+
+    utils::TcpSocket socket_;
     pollfd poll_descriptor_{};
     slipstream::codec::ClientSideDecoder decoder_;
     spdlog::logger& logger_;

@@ -13,7 +13,7 @@ public:
     utils::ConnectionResult Send(const MarketEvent& event) override;
 
 private:
-    utils::Socket socket_;
+    utils::TcpSocket socket_;
 };
 
 #endif // SLIPSTREAM_MD_MSG_CONTROLLER_H

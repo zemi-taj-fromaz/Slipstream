@@ -167,7 +167,7 @@ namespace slipstream {
                 recvMarketEvent(oe_client, oe_decoder, *oe_controller);
             }
             if (poll_fds[session_control_index].revents & POLLIN) {
-                recvSessionControl(session_control_listener, *);
+                recvSessionControl(session_control_listener);
             }
 
             if (poll_fds[oe_index].revents & POLLOUT) {
@@ -244,9 +244,7 @@ namespace slipstream {
         }
     }
 
-    void NetworkManager::recvSessionControl(
-        utils::Socket<utils::SockType::Udp>& client,
-        IMsgController& controller) {
+    void NetworkManager::recvSessionControl(utils::Socket<utils::SockType::Udp>& client) {
 
         std::array<std::byte, 64> recv_buffer;
 
@@ -259,14 +257,12 @@ namespace slipstream {
 
                 if (command == "HALT") {
                     queueSessionControl(codec::SessionState::halt);
-                    u SEND_QUEUE UBACI MENS CINI
                 } else if (command == "OPEN") {
                     queueSessionControl(codec::SessionState::open);
                 } else if (command == "CLOSE") {
                     queueSessionControl(codec::SessionState::close);
                 } else {
-                    std::cout << "[slipstream] Unknown session command: "
-                              << command << '\n';
+                    spdlog::warn("Unknown session command: {}", command);
                 }
 
                 continue;
@@ -405,6 +401,28 @@ namespace slipstream {
             frame.bytes);
         send_queue.push_back(std::move(frame));
     }
+
+    void NetworkManager::queueSessionControl(codec::SessionState state) {
+
+        const auto unix_time =
+            std::chrono::system_clock::now().time_since_epoch();
+        const auto timestamp_ns =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                unix_time)
+                .count();
+
+        const codec::SessionControlMessage sessionControlMsg{
+            .ts_ns = static_cast<std::uint64_t>(timestamp_ns),
+            .state = state
+        };
+
+        EncodedFrame frame{};
+        frame.size = codec::EncodeSessionControl(
+            sessionControlMsg,
+            frame.bytes);
+        send_queue.push_back(std::move(frame));
+    }
+
 
 
     void NetworkManager::resetWakeNotif() {

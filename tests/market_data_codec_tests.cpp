@@ -160,13 +160,13 @@ TEST(MarketDataCodec, RejectsUnsupportedProtocolVersion) {
     EXPECT_EQ(result.bytes_consumed, 0U);
 }
 
-TEST(ServerSideDecoder, ReassemblesQuoteAtEverySplitBoundary) {
+TEST(MarketEventDecoder, ReassemblesQuoteAtEverySplitBoundary) {
     const MarketEvent expected = MakeQuote();
     const auto frame = Encode(expected);
 
     for (std::size_t split = 0; split <= frame.size(); ++split) {
         SCOPED_TRACE(split);
-        ServerSideDecoder decoder;
+        MarketEventDecoder decoder;
         std::vector<MarketEvent> decoded;
 
         const auto first = decoder.Decode(
@@ -183,10 +183,10 @@ TEST(ServerSideDecoder, ReassemblesQuoteAtEverySplitBoundary) {
     }
 }
 
-TEST(ServerSideDecoder, ReassemblesTradeOneByteAtATime) {
+TEST(MarketEventDecoder, ReassemblesTradeOneByteAtATime) {
     const MarketEvent expected = MakeTrade();
     const auto frame = Encode(expected);
-    ServerSideDecoder decoder;
+    MarketEventDecoder decoder;
     std::vector<MarketEvent> decoded;
 
     for (const std::byte byte : frame) {
@@ -199,7 +199,7 @@ TEST(ServerSideDecoder, ReassemblesTradeOneByteAtATime) {
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
-TEST(ServerSideDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
+TEST(MarketEventDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
     const MarketEvent quote = MakeQuote();
     const MarketEvent trade = MakeTrade();
     const auto quote_frame = Encode(quote);
@@ -211,7 +211,7 @@ TEST(ServerSideDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
         trade_frame.begin(),
         trade_frame.begin() + 10);
 
-    ServerSideDecoder decoder;
+    MarketEventDecoder decoder;
     std::vector<MarketEvent> decoded;
     const auto first = decoder.Decode(first_chunk, decoded);
 
@@ -289,6 +289,78 @@ TEST(MarketDataCodec, RejectsInvalidSessionControlState) {
 
     EXPECT_EQ(result.status, DecodeStatus::error);
     EXPECT_EQ(result.bytes_consumed, 0U);
+}
+
+TEST(SessionControlDecoder, ReassemblesMessageAtEverySplitBoundary) {
+    constexpr SessionControlMessage expected{
+        .ts_ns = 987'654'321,
+        .state = SessionState::halt,
+    };
+    std::array<std::byte, 13> frame{};
+    static_cast<void>(EncodeSessionControl(expected, frame));
+
+    for (std::size_t split = 0; split <= frame.size(); ++split) {
+        SCOPED_TRACE(split);
+        SessionControlDecoder decoder;
+        std::vector<SessionControlMessage> decoded;
+
+        const auto first = decoder.Decode(
+            std::span<const std::byte>{frame}.first(split),
+            decoded);
+        const auto second = decoder.Decode(
+            std::span<const std::byte>{frame}.subspan(split),
+            decoded);
+
+        ASSERT_EQ(decoded.size(), 1U);
+        EXPECT_EQ(decoded.front().ts_ns, expected.ts_ns);
+        EXPECT_EQ(decoded.front().state, expected.state);
+        EXPECT_EQ(decoder.BufferedBytes(), 0U);
+        EXPECT_EQ(first.messages_decoded + second.messages_decoded, 1U);
+    }
+}
+
+TEST(SessionControlDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
+    constexpr SessionControlMessage first_message{
+        .ts_ns = 111,
+        .state = SessionState::open,
+    };
+    constexpr SessionControlMessage second_message{
+        .ts_ns = 222,
+        .state = SessionState::close,
+    };
+    std::array<std::byte, 13> first_frame{};
+    std::array<std::byte, 13> second_frame{};
+    static_cast<void>(EncodeSessionControl(first_message, first_frame));
+    static_cast<void>(EncodeSessionControl(second_message, second_frame));
+
+    constexpr std::size_t partial_size = 6;
+    std::vector<std::byte> first_chunk{
+        first_frame.begin(),
+        first_frame.end()};
+    first_chunk.insert(
+        first_chunk.end(),
+        second_frame.begin(),
+        second_frame.begin() + partial_size);
+
+    SessionControlDecoder decoder;
+    std::vector<SessionControlMessage> decoded;
+    const auto first_result = decoder.Decode(first_chunk, decoded);
+
+    ASSERT_EQ(decoded.size(), 1U);
+    EXPECT_EQ(decoded.front().ts_ns, first_message.ts_ns);
+    EXPECT_EQ(decoded.front().state, first_message.state);
+    EXPECT_EQ(first_result.messages_decoded, 1U);
+    EXPECT_EQ(decoder.BufferedBytes(), partial_size);
+
+    const auto second_result = decoder.Decode(
+        std::span<const std::byte>{second_frame}.subspan(partial_size),
+        decoded);
+
+    ASSERT_EQ(decoded.size(), 2U);
+    EXPECT_EQ(decoded[1].ts_ns, second_message.ts_ns);
+    EXPECT_EQ(decoded[1].state, second_message.state);
+    EXPECT_EQ(second_result.messages_decoded, 1U);
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
 TEST(ClientSideDecoder, ReassemblesHeartbeatAndSessionControlFromChunks) {
