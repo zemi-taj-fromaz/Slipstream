@@ -2,7 +2,51 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <string>
+#include <vector>
+
+TEST(ExecutionReport, CalculatesNearestRankTickToOrderPercentiles) {
+    std::vector<std::uint64_t> samples;
+    samples.reserve(1'000);
+    for (std::uint64_t sample = 1; sample <= 1'000; ++sample) {
+        samples.push_back(sample);
+    }
+
+    const TickToOrderStatistics statistics =
+        CalculateTickToOrderStatistics(samples);
+
+    EXPECT_EQ(statistics.p50_ns, 500U);
+    EXPECT_EQ(statistics.p99_ns, 990U);
+    EXPECT_EQ(statistics.p999_ns, 999U);
+    EXPECT_EQ(statistics.sample_count, 1'000U);
+}
+
+TEST(ExecutionReport, FormatsTickToOrderStatisticsInMicroseconds) {
+    ExecutionReport report{};
+    report.tick_to_order = {
+        .p50_ns = 1'900,
+        .p99_ns = 6'400,
+        .p999_ns = 21'700,
+        .sample_count = 100,
+    };
+
+    const std::string output =
+        FormatExecutionReport(report, SlipstreamConfig{});
+
+    EXPECT_NE(
+        output.find("tick-to-order p50   1.900 us"),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("tick-to-order p99   6.400 us"),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("tick-to-order p99.9 21.700 us"),
+        std::string::npos);
+    EXPECT_NE(
+        output.find("latency samples     100"),
+        std::string::npos);
+}
 
 TEST(ExecutionReport, FormatsBuyOnlySession) {
     ExecutionReport report{

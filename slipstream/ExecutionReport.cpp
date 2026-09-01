@@ -1,9 +1,11 @@
 #include "ExecutionReport.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -28,6 +30,34 @@ std::string FormatPrice(const std::int64_t price) {
     return output.str();
 }
 
+}
+
+TickToOrderStatistics CalculateTickToOrderStatistics(
+    const std::span<const std::uint64_t> samples) {
+    if (samples.empty()) {
+        return {};
+    }
+
+    std::vector<std::uint64_t> sorted_samples{
+        samples.begin(),
+        samples.end()};
+    std::sort(sorted_samples.begin(), sorted_samples.end());
+
+    const auto percentile = [&sorted_samples](
+        const std::size_t numerator,
+        const std::size_t denominator) {
+        const std::size_t rank =
+            (sorted_samples.size() * numerator + denominator - 1) /
+            denominator;
+        return sorted_samples[rank - 1];
+    };
+
+    return {
+        .p50_ns = percentile(50, 100),
+        .p99_ns = percentile(99, 100),
+        .p999_ns = percentile(999, 1'000),
+        .sample_count = sorted_samples.size(),
+    };
 }
 
 std::string FormatExecutionReport(
@@ -101,6 +131,30 @@ std::string FormatExecutionReport(
            << "%  (cap "
            << config.participation_cap * 100.0
            << "%)\n";
+
+    if (report.tick_to_order.sample_count == 0) {
+        output << std::left << std::setw(20) << "tick-to-order p50"
+               << "n/a\n";
+        output << std::left << std::setw(20) << "tick-to-order p99"
+               << "n/a\n";
+        output << std::left << std::setw(20) << "tick-to-order p99.9"
+               << "n/a\n";
+    } else {
+        output << std::left << std::setw(20) << "tick-to-order p50"
+               << std::fixed << std::setprecision(3)
+               << static_cast<double>(report.tick_to_order.p50_ns) / 1'000.0
+               << " us\n";
+        output << std::left << std::setw(20) << "tick-to-order p99"
+               << std::fixed << std::setprecision(3)
+               << static_cast<double>(report.tick_to_order.p99_ns) / 1'000.0
+               << " us\n";
+        output << std::left << std::setw(20) << "tick-to-order p99.9"
+               << std::fixed << std::setprecision(3)
+               << static_cast<double>(report.tick_to_order.p999_ns) / 1'000.0
+               << " us\n";
+    }
+    output << std::left << std::setw(20) << "latency samples"
+           << report.tick_to_order.sample_count << '\n';
 
     return output.str();
 }

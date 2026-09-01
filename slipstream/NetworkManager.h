@@ -7,6 +7,7 @@
 
 #include "SlipstreamConfig.h"
 #include "Queues.h"
+#include "ExecutionReport.h"
 #include "socket.h"
 
 #include <deque>
@@ -15,6 +16,7 @@
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <vector>
 
 
 class IMsgController;
@@ -37,6 +39,8 @@ namespace slipstream {
 
         void Run();
         void SignalEvent();
+        [[nodiscard]]
+        TickToOrderStatistics GetTickToOrderStatistics() const;
     private:
 
         void resetWakeNotif();
@@ -65,6 +69,7 @@ namespace slipstream {
        // codec::SessionControlDecoder session_control_decoder{};
 
         std::deque<EncodedFrame> send_queue;
+        std::vector<std::uint64_t> tick_to_order_samples;
         int wake_fd{-1};
 
         std::chrono::steady_clock::time_point last_oe_activity{};

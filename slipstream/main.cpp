@@ -189,8 +189,12 @@ int main(int argc, char* argv[]) {
             std::rethrow_exception(engine_error);
         }
 
+        ExecutionReport execution_report = engine.GetExecutionReport();
+        execution_report.tick_to_order =
+            network_manager.GetTickToOrderStatistics();
+
         const std::string report = FormatExecutionReport(
-            engine.GetExecutionReport(),
+            execution_report,
             slipstream_config);
 
         std::ofstream report_file{

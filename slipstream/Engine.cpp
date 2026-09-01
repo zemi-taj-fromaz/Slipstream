@@ -64,12 +64,12 @@ Engine::Engine(const SlipstreamConfig& slipstream,
 
 void Engine::Run() {
     while (running.load(std::memory_order_relaxed)) {
-        MarketEvent event{};
-        if (!ingress.pop(event)) {
+        slipstream::InboundEvent inbound{};
+        if (!ingress.pop(inbound)) {
             const std::uint64_t observed = ingress_generation.load(
                 std::memory_order_acquire);
 
-            if (!ingress.pop(event)) {
+            if (!ingress.pop(inbound)) {
                 if (running.load(std::memory_order_acquire)) {
                     ingress_generation.wait(
                         observed,
@@ -78,6 +78,8 @@ void Engine::Run() {
                 continue;
             }
         }
+
+        MarketEvent& event = inbound.message;
 
         const TradeManagerResult manager_result = trade_manager.Push(event);
 
@@ -165,7 +167,10 @@ void Engine::Run() {
             };
             std::memcpy(order.symbol, event.symbol, sizeof(order.symbol));
 
-            if (!PushOutbound(order)) {
+            if (!PushOutbound(
+                    order,
+                    inbound.received_at_ns,
+                    true)) {
                 return;
             }
 
@@ -226,8 +231,17 @@ void Engine::Stop() noexcept {
     ingress_generation.notify_one();
 }
 
-bool Engine::PushOutbound(slipstream::codec::OrderEntryClientMessage outbound) {
-    while (!egress.push(outbound)) {
+bool Engine::PushOutbound(
+    const slipstream::codec::OrderEntryClientMessage& outbound,
+    const std::uint64_t trigger_received_at_ns,
+    const bool measure_tick_to_order) {
+    const slipstream::OutboundMessage message{
+        .message = outbound,
+        .trigger_received_at_ns = trigger_received_at_ns,
+        .measure_tick_to_order = measure_tick_to_order,
+    };
+
+    while (!egress.push(message)) {
         if (!running.load(std::memory_order_acquire)) {
             return false;
         }

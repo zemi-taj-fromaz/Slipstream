@@ -23,6 +23,17 @@
 
 namespace slipstream {
 
+    namespace {
+
+        std::uint64_t MonotonicNowNs() {
+            return static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch())
+                    .count());
+        }
+
+    }
+
     NetworkManager::NetworkManager(const SlipstreamConfig& config)
         : config_{config},
           wake_fd{::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)} {
@@ -32,6 +43,7 @@ namespace slipstream {
                 std::generic_category(),
                 "eventfd() failed");
         }
+        tick_to_order_samples.reserve(10'000);
     }
 
     NetworkManager::NetworkManager(
@@ -188,6 +200,7 @@ namespace slipstream {
         while (true) {
             const ::ssize_t recvd = client.Recv(recv_buffer);
             if (recvd > 0) {
+                const std::uint64_t received_at_ns = MonotonicNowNs();
                 const std::span<const std::byte> recv_buffer_span({recv_buffer.data(), static_cast<std::size_t>(recvd)});
 
                 std::vector<MarketEvent> recv_messages;
@@ -201,7 +214,11 @@ namespace slipstream {
                     }
 
                     if (ingress != nullptr) {
-                        if (!ingress->push(recv_message)) {
+                        const InboundEvent inbound{
+                            .message = recv_message,
+                            .received_at_ns = received_at_ns,
+                        };
+                        if (!ingress->push(inbound)) {
                             throw std::runtime_error(
                                 "failed to enqueue MarketEvent");
                         }
@@ -319,9 +336,13 @@ namespace slipstream {
             return;
         }
 
-        codec::OrderEntryClientMessage message{};
-        while (egress->pop(message)) {
+        OutboundMessage outbound{};
+        while (egress->pop(outbound)) {
             EncodedFrame frame{};
+            frame.trigger_received_at_ns =
+                outbound.trigger_received_at_ns;
+            frame.measure_tick_to_order =
+                outbound.measure_tick_to_order;
 
             std::visit(
                 [&frame](const auto& value) {
@@ -337,7 +358,7 @@ namespace slipstream {
                         frame.size = codec::EncodeSessionControl(value, frame.bytes);
                     }
                 },
-                message);
+                outbound.message);
 
             send_queue.push_back(std::move(frame));
         }
@@ -351,8 +372,19 @@ namespace slipstream {
                 alive = false;
                 return;
             }
+            if (frame.measure_tick_to_order) {
+                const std::uint64_t sent_at_ns = MonotonicNowNs();
+                if (sent_at_ns >= frame.trigger_received_at_ns) {
+                    tick_to_order_samples.push_back(
+                        sent_at_ns - frame.trigger_received_at_ns);
+                }
+            }
             send_queue.pop_front();
         }
+    }
+
+    TickToOrderStatistics NetworkManager::GetTickToOrderStatistics() const {
+        return CalculateTickToOrderStatistics(tick_to_order_samples);
     }
 
     void NetworkManager::markOeActivity() {

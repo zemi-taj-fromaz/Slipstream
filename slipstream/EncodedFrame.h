@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <stdexcept>
 
@@ -20,6 +21,8 @@ struct EncodedFrame {
 
     std::size_t size{};
     std::size_t sent{};
+    std::uint64_t trigger_received_at_ns{};
+    bool measure_tick_to_order{};
 
     [[nodiscard]] bool complete() const noexcept { return sent == size; }
     [[nodiscard]] std::span<const std::byte> remainingBytes() const noexcept {
