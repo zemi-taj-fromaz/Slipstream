@@ -3,6 +3,7 @@
 #include "process_rows.h"
 #include "replay_start.h"
 #include "slipstream.grpc.pb.h"
+#include "transport/MdGrpcClientTransport.h"
 #include "transport/MdTcpClientTransport.h"
 
 #include <exception>
@@ -32,7 +33,16 @@ int main(int argc, char* argv[]) {
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
-        MdTcpClientTransport transport{options.host.c_str(), options.port};
+        std::unique_ptr<IClientTransport> transport;
+        if (options.transport == "grpc") {
+            transport = std::make_unique<MdGrpcClientTransport>(
+                options.host,
+                options.port);
+        } else {
+            transport = std::make_unique<MdTcpClientTransport>(
+                options.host.c_str(),
+                options.port);
+        }
 
         utils::ConnectionResult replay_result{};
         if (utils::ReplayVerificationEnabled()) {
@@ -42,17 +52,26 @@ int main(int argc, char* argv[]) {
             CanonicalFileMsgController expected_events{expected_path.c_str()};
             replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                transport,
+                *transport,
                 options.start_at_ns,
                 &expected_events);
         } else {
             replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                transport,
+                *transport,
                 options.start_at_ns);
         }
 
+        // The server disconnected while the market-data replay was running.
         if (replay_result == utils::ConnectionResult::PeerDisconnected) {
+            transport->Finish();
+            logger.info("Server closed the market-data connection");
+            return 0;
+        }
+
+        // The replay ended naturally; close the transport connection.
+        if (transport->Finish() ==
+            utils::ConnectionResult::PeerDisconnected) {
             logger.info("Server closed the market-data connection");
             return 0;
         }

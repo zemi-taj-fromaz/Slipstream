@@ -8,6 +8,7 @@ namespace utils {
 
 struct ReplayClientOptions {
     std::string host;
+    std::string transport{"tcp"};
     std::uint16_t port;
     std::uint64_t start_at_ns;
 };

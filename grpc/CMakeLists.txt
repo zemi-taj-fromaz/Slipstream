@@ -18,6 +18,24 @@ set(SLIPSTREAM_PROTO_HEADERS
 
 file(MAKE_DIRECTORY "${SLIPSTREAM_PROTO_GENERATED_DIR}")
 
+get_target_property(
+    SLIPSTREAM_PROTOBUF_INCLUDE_DIRS
+    protobuf::libprotobuf
+    INTERFACE_INCLUDE_DIRECTORIES
+)
+
+set(SLIPSTREAM_PROTO_PATH_ARGUMENTS
+    "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/proto"
+)
+
+foreach(include_dir IN LISTS SLIPSTREAM_PROTOBUF_INCLUDE_DIRS)
+    if(NOT include_dir MATCHES "^\\$<")
+        list(APPEND SLIPSTREAM_PROTO_PATH_ARGUMENTS
+            "--proto_path=${include_dir}"
+        )
+    endif()
+endforeach()
+
 add_custom_command(
     OUTPUT
         ${SLIPSTREAM_PROTO_SOURCES}
@@ -25,7 +43,7 @@ add_custom_command(
     COMMAND
         $<TARGET_FILE:protobuf::protoc>
     ARGS
-        "--proto_path=${CMAKE_CURRENT_SOURCE_DIR}/proto"
+        ${SLIPSTREAM_PROTO_PATH_ARGUMENTS}
         "--cpp_out=${SLIPSTREAM_PROTO_GENERATED_DIR}"
         "--grpc_out=${SLIPSTREAM_PROTO_GENERATED_DIR}"
         "--plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"

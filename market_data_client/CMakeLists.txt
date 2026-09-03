@@ -1,5 +1,7 @@
 add_executable(market_data_client
     main.cpp
+    transport/MdGrpcClientTransport.cpp
+    transport/MdGrpcClientTransport.h
     transport/MdTcpClientTransport.cpp
     transport/MdTcpClientTransport.h
 )

@@ -4,6 +4,7 @@
 #include "process_rows.h"
 #include "replay_start.h"
 #include "slipstream.grpc.pb.h"
+#include "transport/OeGrpcClientTransport.h"
 #include "transport/OeTcpClientTransport.h"
 #include <chrono>
 #include <exception>
@@ -37,10 +38,18 @@ int main(int argc, char* argv[]) {
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
-        OeTcpClientTransport transport{
-            options.host.c_str(),
-            options.port,
-            logger};
+        std::unique_ptr<IClientTransport> transport;
+        if (options.transport == "grpc") {
+            transport = std::make_unique<OeGrpcClientTransport>(
+                options.host,
+                options.port,
+                logger);
+        } else {
+            transport = std::make_unique<OeTcpClientTransport>(
+                options.host.c_str(),
+                options.port,
+                logger);
+        }
 
         utils::ConnectionResult replay_result{};
         if (utils::ReplayVerificationEnabled()) {
@@ -50,26 +59,37 @@ int main(int argc, char* argv[]) {
             CanonicalFileMsgController expected_events{expected_path.c_str()};
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
-                transport,
+                *transport,
                 options.start_at_ns,
                 &expected_events);
         } else {
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
-                transport,
+                *transport,
                 options.start_at_ns);
         }
 
+        // The server disconnected while the order-entry replay was running.
         if (replay_result == utils::ConnectionResult::PeerDisconnected) {
+            transport->Finish();
             logger.info("Server closed the order-entry connection");
             return 0;
         }
 
         const utils::ConnectionResult final_result =
-            transport.ProcessInboundUntil(
+            transport->ProcessInboundUntil(
             std::chrono::steady_clock::now() + final_response_grace);
 
+        // The server disconnected while the client awaited final responses.
         if (final_result == utils::ConnectionResult::PeerDisconnected) {
+            transport->Finish();
+            logger.info("Server closed the order-entry connection");
+            return 0;
+        }
+
+        // The replay ended naturally; close the transport connection.
+        if (transport->Finish() ==
+            utils::ConnectionResult::PeerDisconnected) {
             logger.info("Server closed the order-entry connection");
             return 0;
         }

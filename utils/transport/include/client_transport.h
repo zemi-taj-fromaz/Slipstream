@@ -19,6 +19,10 @@ public:
         std::this_thread::sleep_until(deadline);
         return utils::ConnectionResult::Complete;
     }
+
+    virtual utils::ConnectionResult Finish() {
+        return utils::ConnectionResult::Complete;
+    }
 };
 
 #endif

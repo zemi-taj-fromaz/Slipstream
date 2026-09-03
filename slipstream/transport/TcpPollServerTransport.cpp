@@ -369,6 +369,7 @@ void TcpPollServerTransport::flushSendQueue(
     utils::Socket<utils::SockType::Tcp>& oe_client) {
     while (!send_queue.empty()) {
         EncodedFrame& frame = send_queue.front();
+        const std::uint64_t send_started_at_ns = MonotonicNowNs();
         if (oe_client.SendAll(frame.remainingBytes()) ==
             utils::ConnectionResult::PeerDisconnected) {
             alive.store(false, std::memory_order_release);
@@ -376,10 +377,9 @@ void TcpPollServerTransport::flushSendQueue(
         }
 
         if (frame.measure_tick_to_order) {
-            const std::uint64_t sent_at_ns = MonotonicNowNs();
-            if (sent_at_ns >= frame.trigger_received_at_ns) {
+            if (send_started_at_ns >= frame.trigger_received_at_ns) {
                 tick_to_order_samples.push_back(
-                    sent_at_ns - frame.trigger_received_at_ns);
+                    send_started_at_ns - frame.trigger_received_at_ns);
             }
         }
 

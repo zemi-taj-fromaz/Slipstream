@@ -51,6 +51,12 @@ ReplayClientOptions ParseReplayClientOptions(
         if (option == "--host") {
             options.host = value;
             has_host = true;
+        } else if (option == "--transport") {
+            if (value != "tcp" && value != "grpc") {
+                throw std::invalid_argument(
+                    "--transport must be tcp or grpc");
+            }
+            options.transport = value;
         } else if (option == "--port") {
             const std::uint64_t port = ParseUnsigned(value, option);
             if (port == 0 ||
@@ -72,7 +78,8 @@ ReplayClientOptions ParseReplayClientOptions(
         throw std::invalid_argument(
             "usage: " + std::string{argv[0]} +
             " --host <IPv4-address> --port <port> "
-            "--start-at-ns <unix-nanoseconds>");
+            "--start-at-ns <unix-nanoseconds> "
+            "[--transport tcp|grpc]");
     }
 
     return options;

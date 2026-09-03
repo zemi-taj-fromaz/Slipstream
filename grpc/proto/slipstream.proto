@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package slipstream.grpc_api;
 
+import "google/protobuf/empty.proto";
+
 message Quote {
   uint64 ts_ns = 1;
   string symbol = 2;
@@ -88,10 +90,6 @@ message ExecReport {
   RejectReason reason_code = 6;
 }
 
-message PublishResult {
-  uint64 messages_received = 1;
-}
-
 message OeClientMessage {
   oneof payload {
     Trade trade = 1;
@@ -108,9 +106,9 @@ message OeServerMessage {
 }
 
 service MarketData {
-  rpc Publish(stream Quote) returns (PublishResult);
+  rpc Connect(stream Quote) returns (google.protobuf.Empty);
 }
 
 service OrderEntry {
-  rpc Session(stream OeClientMessage) returns (stream OeServerMessage);
+  rpc Connect(stream OeClientMessage) returns (stream OeServerMessage);
 }

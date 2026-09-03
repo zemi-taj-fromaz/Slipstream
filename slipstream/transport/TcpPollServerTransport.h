@@ -38,7 +38,7 @@ public:
     void NotifyOutboundReady() override;
 
     [[nodiscard]]
-    TickToOrderStatistics GetTickToOrderStatistics() const;
+    TickToOrderStatistics GetTickToOrderStatistics() const override;
 
 private:
     void resetWakeNotif();

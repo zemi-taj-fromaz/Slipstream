@@ -21,6 +21,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "transport/TcpPollServerTransport.h"
+#include "transport/GrpcServerTransport.h"
 #include "Engine.h"
 #include "slipstream.grpc.pb.h"
 
@@ -146,19 +147,34 @@ int main(int argc, char* argv[]) {
         slipstream::OrderEntryQueue egress;
         std::atomic<std::uint64_t> ingress_generation{0};
 
-        slipstream::TcpPollServerTransport transport{
-            slipstream_config,
-            ingress,
-            egress,
-            ingress_generation};
-        slipstream::IServerTransport& server_transport = transport;
+        std::unique_ptr<slipstream::IServerTransport> server_transport;
+
+        if (slipstream_config.transport == "grpc") {
+            server_transport =
+                std::make_unique<slipstream::GrpcServerTransport>(
+                    slipstream_config,
+                    ingress,
+                    egress,
+                    ingress_generation);
+        } else if (slipstream_config.transport == "tcp") {
+            server_transport =
+                std::make_unique<slipstream::TcpPollServerTransport>(
+                    slipstream_config,
+                    ingress,
+                    egress,
+                    ingress_generation);
+        } else {
+            throw std::invalid_argument(
+                "--transport must be tcp or grpc");
+        }
+
         Engine engine{
             slipstream_config,
             ingress,
             egress,
             ingress_generation,
             [&server_transport] {
-                server_transport.NotifyOutboundReady();
+                server_transport->NotifyOutboundReady();
             }};
 
         std::exception_ptr network_error;
@@ -166,7 +182,7 @@ int main(int argc, char* argv[]) {
 
         std::jthread network_thread{[&] {
             try {
-                server_transport.Run();
+                server_transport->Run();
             } catch (...) {
                 network_error = std::current_exception();
             }
@@ -193,7 +209,7 @@ int main(int argc, char* argv[]) {
 
         ExecutionReport execution_report = engine.GetExecutionReport();
         execution_report.tick_to_order =
-            transport.GetTickToOrderStatistics();
+            server_transport->GetTickToOrderStatistics();
 
         const std::string report = FormatExecutionReport(
             execution_report,

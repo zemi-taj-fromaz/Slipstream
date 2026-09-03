@@ -1,5 +1,7 @@
 add_executable(order_entry_client
     main.cpp
+    transport/OeGrpcClientTransport.cpp
+    transport/OeGrpcClientTransport.h
     transport/OeTcpClientTransport.cpp
     transport/OeTcpClientTransport.h
 )

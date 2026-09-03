@@ -10,6 +10,7 @@ md_host="127.0.0.1"
 md_port="9001"
 oe_host="127.0.0.1"
 oe_port="9002"
+transport="tcp"
 server_args=()
 
 while (($# > 0)); do
@@ -34,6 +35,10 @@ while (($# > 0)); do
             oe_port="$2"
             shift 2
             ;;
+        --transport)
+            transport="$2"
+            shift 2
+            ;;
         *)
             server_args+=("$1")
             shift
@@ -46,6 +51,7 @@ server_args+=(
     --md-port "${md_port}"
     --oe-host "${oe_host}"
     --oe-port "${oe_port}"
+    --transport "${transport}"
 )
 
 server="${build_dir}/slipstream/slipstream"
@@ -94,12 +100,14 @@ echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
 "${md_client}" \
     --host "${md_host}" \
     --port "${md_port}" \
+    --transport "${transport}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 
 "${oe_client}" \
     --host "${oe_host}" \
     --port "${oe_port}" \
+    --transport "${transport}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 
