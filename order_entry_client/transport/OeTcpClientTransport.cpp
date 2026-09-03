@@ -1,10 +1,9 @@
-#include "oe_client_msg_controller.h"
+#include "OeTcpClientTransport.h"
 
 #include <array>
 #include <cerrno>
 #include <cstddef>
 #include <stdexcept>
-#include <string>
 #include <system_error>
 #include <variant>
 #include <vector>
@@ -16,9 +15,9 @@ struct Overloaded : Visitors... {
     using Visitors::operator()...;
 };
 
-} // namespace
+}
 
-OEClientMsgController::OEClientMsgController(
+OeTcpClientTransport::OeTcpClientTransport(
     const char* host,
     std::uint16_t port,
     spdlog::logger& logger)
@@ -30,7 +29,8 @@ OEClientMsgController::OEClientMsgController(
     poll_descriptor_.fd = socket_.NativeHandle();
 }
 
-utils::ConnectionResult OEClientMsgController::Send(const MarketEvent& event) {
+utils::ConnectionResult OeTcpClientTransport::Send(
+    const MarketEvent& event) {
     if (sessionState == slipstream::codec::SessionState::halt) {
         return utils::ConnectionResult::Complete;
     }
@@ -39,21 +39,27 @@ utils::ConnectionResult OEClientMsgController::Send(const MarketEvent& event) {
         return utils::ConnectionResult::PeerDisconnected;
     }
 
-    std::array<std::byte, slipstream::codec::max_market_data_frame_size> buffer{};
+    std::array<
+        std::byte,
+        slipstream::codec::max_market_data_frame_size> buffer{};
     const std::size_t encoded_size =
         slipstream::codec::EncodeMarketEvent(event, buffer);
 
     return socket_.SendAll({buffer.data(), encoded_size});
 }
 
-utils::ConnectionResult OEClientMsgController::ProcessInboundUntil(std::chrono::steady_clock::time_point deadline) {
+utils::ConnectionResult OeTcpClientTransport::ProcessInboundUntil(
+    std::chrono::steady_clock::time_point deadline) {
     while (true) {
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline) {
             return utils::ConnectionResult::Complete;
         }
 
-        const auto timeout_ms = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        const auto timeout_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - now)
+                .count();
 
         poll_descriptor_.events = POLLIN;
         poll_descriptor_.revents = 0;
@@ -96,7 +102,8 @@ utils::ConnectionResult OEClientMsgController::ProcessInboundUntil(std::chrono::
     }
 }
 
-std::string OEClientMsgController::Symbol(const char (&symbol)[12]) {
+std::string OeTcpClientTransport::Symbol(
+    const char (&symbol)[12]) {
     std::size_t length = 0;
     while (length < sizeof(symbol) && symbol[length] != '\0') {
         ++length;
@@ -104,7 +111,7 @@ std::string OEClientMsgController::Symbol(const char (&symbol)[12]) {
     return {symbol, length};
 }
 
-utils::ConnectionResult OEClientMsgController::ReceiveAvailable() {
+utils::ConnectionResult OeTcpClientTransport::ReceiveAvailable() {
     std::array<std::byte, 4096> buffer{};
 
     while (true) {
@@ -154,7 +161,7 @@ utils::ConnectionResult OEClientMsgController::ReceiveAvailable() {
     }
 }
 
-void OEClientMsgController::HandleMessage(
+void OeTcpClientTransport::HandleMessage(
     const slipstream::codec::OrderEntryClientMessage& message) {
     std::visit(
         Overloaded{

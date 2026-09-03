@@ -1,9 +1,9 @@
 #include "parser.h"
 
 #include "message_processor.h"
-#include "oe_client_msg_controller.h"
 #include "process_rows.h"
 #include "replay_start.h"
+#include "transport/OeTcpClientTransport.h"
 #include <chrono>
 #include <exception>
 #include <memory>
@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
-        OEClientMsgController oe_controller{
+        OeTcpClientTransport transport{
             options.host.c_str(),
             options.port,
             logger};
@@ -49,13 +49,13 @@ int main(int argc, char* argv[]) {
             CanonicalFileMsgController expected_events{expected_path.c_str()};
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
-                oe_controller,
+                transport,
                 options.start_at_ns,
                 &expected_events);
         } else {
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
-                oe_controller,
+                transport,
                 options.start_at_ns);
         }
 
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
         }
 
         const utils::ConnectionResult final_result =
-            oe_controller.ProcessInboundUntil(
+            transport.ProcessInboundUntil(
             std::chrono::steady_clock::now() + final_response_grace);
 
         if (final_result == utils::ConnectionResult::PeerDisconnected) {

@@ -1,7 +1,7 @@
 add_executable(order_entry_client
     main.cpp
-    oe_client_msg_controller.cpp
-    oe_client_msg_controller.h
+    transport/OeTcpClientTransport.cpp
+    transport/OeTcpClientTransport.h
 )
 
 target_link_libraries(order_entry_client

@@ -1,5 +1,5 @@
-#ifndef SLIPSTREAM_OE_CLIENT_MSG_CONTROLLER_H
-#define SLIPSTREAM_OE_CLIENT_MSG_CONTROLLER_H
+#ifndef SLIPSTREAM_OE_TCP_CLIENT_TRANSPORT_H
+#define SLIPSTREAM_OE_TCP_CLIENT_TRANSPORT_H
 
 #include "client_transport.h"
 #include "slipstream_codec/market_data_codec.h"
@@ -12,9 +12,9 @@
 
 #include <spdlog/logger.h>
 
-class OEClientMsgController final : public IClientTransport {
+class OeTcpClientTransport final : public IClientTransport {
 public:
-    OEClientMsgController(
+    OeTcpClientTransport(
         const char* host,
         std::uint16_t port,
         spdlog::logger& logger);
@@ -30,12 +30,12 @@ private:
     void HandleMessage(
         const slipstream::codec::OrderEntryClientMessage& message);
 
-    slipstream::codec::SessionState sessionState{slipstream::codec::SessionState::open};
-
+    slipstream::codec::SessionState sessionState{
+        slipstream::codec::SessionState::open};
     utils::TcpSocket socket_;
     pollfd poll_descriptor_{};
     slipstream::codec::ClientSideDecoder decoder_;
     spdlog::logger& logger_;
 };
 
-#endif // SLIPSTREAM_OE_CLIENT_MSG_CONTROLLER_H
+#endif

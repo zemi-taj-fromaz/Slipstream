@@ -1,8 +1,8 @@
 #include "parser.h"
-#include "md_msg_controller.h"
 #include "message_processor.h"
 #include "process_rows.h"
 #include "replay_start.h"
+#include "transport/MdTcpClientTransport.h"
 
 #include <exception>
 #include <memory>
@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
-        MDMsgController md_controller{options.host.c_str(), options.port};
+        MdTcpClientTransport transport{options.host.c_str(), options.port};
 
         utils::ConnectionResult replay_result{};
         if (utils::ReplayVerificationEnabled()) {
@@ -41,13 +41,13 @@ int main(int argc, char* argv[]) {
             CanonicalFileMsgController expected_events{expected_path.c_str()};
             replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                md_controller,
+                transport,
                 options.start_at_ns,
                 &expected_events);
         } else {
             replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                md_controller,
+                transport,
                 options.start_at_ns);
         }
 

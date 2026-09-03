@@ -1,7 +1,7 @@
 add_executable(market_data_client
     main.cpp
-    md_msg_controller.cpp
-    md_msg_controller.h
+    transport/MdTcpClientTransport.cpp
+    transport/MdTcpClientTransport.h
 )
 
 target_link_libraries(market_data_client
