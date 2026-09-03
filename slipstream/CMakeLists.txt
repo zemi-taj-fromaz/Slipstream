@@ -9,6 +9,7 @@ add_executable(slipstream
     TradeManager.h
     VwapWindow.cpp
     VwapWindow.h
+    transport/GrpcServerTransport.h
     transport/IServerTransport.h
     transport/TcpPollServerTransport.cpp
     transport/TcpPollServerTransport.h
