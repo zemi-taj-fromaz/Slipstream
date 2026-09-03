@@ -22,6 +22,7 @@ target_include_directories(slipstream
 target_link_libraries(slipstream
     PRIVATE
         slipstream_codec
+        slipstream_grpc_protocol
         UTILS
         spdlog::spdlog
 )

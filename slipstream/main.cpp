@@ -22,6 +22,7 @@
 
 #include "transport/TcpPollServerTransport.h"
 #include "Engine.h"
+#include "slipstream.grpc.pb.h"
 
 #include <thread>
 

@@ -18,6 +18,7 @@ add_compile_options(
 
 add_subdirectory(utils)
 add_subdirectory(codec)
+add_subdirectory(grpc)
 add_subdirectory(market_data_client)
 add_subdirectory(order_entry_client)
 add_subdirectory(slipstream)

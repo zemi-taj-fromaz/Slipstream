@@ -2,6 +2,7 @@
 #include "message_processor.h"
 #include "process_rows.h"
 #include "replay_start.h"
+#include "slipstream.grpc.pb.h"
 #include "transport/MdTcpClientTransport.h"
 
 #include <exception>

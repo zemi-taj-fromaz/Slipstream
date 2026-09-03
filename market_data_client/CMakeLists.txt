@@ -8,6 +8,7 @@ target_link_libraries(market_data_client
     PRIVATE
         UTILS
         slipstream_codec
+        slipstream_grpc_protocol
         spdlog::spdlog
 )
 

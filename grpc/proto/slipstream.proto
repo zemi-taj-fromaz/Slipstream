@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package slipstream.grpc_api;
+
+message Quote {
+  uint64 ts_ns = 1;
+  string symbol = 2;
+  int64 bid_price = 3;
+  uint32 bid_qty = 4;
+  int64 ask_price = 5;
+  uint32 ask_qty = 6;
+}
+
+message Trade {
+  enum Aggressor {
+    AGGRESSOR_UNKNOWN = 0;
+    AGGRESSOR_BUY = 1;
+    AGGRESSOR_SELL = 2;
+  }
+
+  uint64 ts_ns = 1;
+  string symbol = 2;
+  int64 price = 3;
+  int64 id = 4;
+  uint32 qty = 5;
+  Aggressor aggressor = 6;
+}
+
+message Heartbeat {
+  uint64 ts_ns = 1;
+}
+
+message SessionControl {
+  enum State {
+    OPEN = 0;
+    HALT = 1;
+    CLOSE = 2;
+  }
+
+  uint64 ts_ns = 1;
+  State state = 2;
+}
+
+message NewOrder {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    ACCEPTED = 1;
+    REJECTED = 2;
+  }
+
+  enum Side {
+    SIDE_UNSPECIFIED = 0;
+    BUY = 1;
+    SELL = 2;
+  }
+
+  uint64 client_order_id = 1;
+  string symbol = 2;
+  Status status = 3;
+  uint64 ts_ns = 4;
+  int64 trade_id = 5;
+  Side side = 6;
+  uint32 qty = 7;
+  int64 limit_price = 8;
+}
+
+message ExecReport {
+  enum Status {
+    ACK = 0;
+    FILL = 1;
+    PARTIAL = 2;
+    REJECT = 3;
+  }
+
+  enum RejectReason {
+    NONE = 0;
+    RISK = 1;
+    PRICE = 2;
+    SIZE = 3;
+    THROTTLE = 4;
+  }
+
+  uint64 client_order_id = 1;
+  uint64 ts_ns = 2;
+  Status status = 3;
+  uint32 filled_qty = 4;
+  int64 avg_price = 5;
+  RejectReason reason_code = 6;
+}
+
+message PublishResult {
+  uint64 messages_received = 1;
+}
+
+message OeClientMessage {
+  oneof payload {
+    Trade trade = 1;
+  }
+}
+
+message OeServerMessage {
+  oneof payload {
+    NewOrder new_order = 1;
+    ExecReport exec_report = 2;
+    Heartbeat heartbeat = 3;
+    SessionControl session_control = 4;
+  }
+}
+
+service MarketData {
+  rpc Publish(stream Quote) returns (PublishResult);
+}
+
+service OrderEntry {
+  rpc Session(stream OeClientMessage) returns (stream OeServerMessage);
+}

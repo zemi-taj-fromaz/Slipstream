@@ -1,4 +1,5 @@
 .idea/
 *.log
 build-linux/
+build-grpc/
 Dockerfile.dev
