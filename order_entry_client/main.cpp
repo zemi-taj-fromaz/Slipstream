@@ -2,6 +2,7 @@
 
 #include "message_processor.h"
 #include "oe_client_msg_controller.h"
+#include "process_rows.h"
 #include "replay_start.h"
 #include <chrono>
 #include <exception>
@@ -46,11 +47,11 @@ int main(int argc, char* argv[]) {
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/expected_trades.csv";
             CanonicalFileMsgController expected_events{expected_path.c_str()};
-            FanoutMsgController controller{expected_events, oe_controller};
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
-                controller,
-                options.start_at_ns);
+                oe_controller,
+                options.start_at_ns,
+                &expected_events);
         } else {
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,

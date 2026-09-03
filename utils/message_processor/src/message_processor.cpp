@@ -11,17 +11,6 @@
 void IMsgController::Sink(const MarketEvent&) {
 }
 
-utils::ConnectionResult IMsgController::Send(const MarketEvent& event) {
-    Sink(event);
-    return utils::ConnectionResult::Complete;
-}
-
-utils::ConnectionResult IMsgController::ProcessInboundUntil(
-    std::chrono::steady_clock::time_point deadline) {
-    std::this_thread::sleep_until(deadline);
-    return utils::ConnectionResult::Complete;
-}
-
 CanonicalFileMsgController::CanonicalFileMsgController(const char* path)
     : file_{path} {
     if (!file_) {
@@ -92,13 +81,4 @@ FanoutMsgController::FanoutMsgController(
 void FanoutMsgController::Sink(const MarketEvent& event) {
     first_.Sink(event);
     second_.Sink(event);
-}
-
-utils::ConnectionResult FanoutMsgController::Send(const MarketEvent& event) {
-    const utils::ConnectionResult first_result = first_.Send(event);
-    if (first_result == utils::ConnectionResult::PeerDisconnected) {
-        return first_result;
-    }
-
-    return second_.Send(event);
 }

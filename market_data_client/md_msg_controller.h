@@ -1,12 +1,12 @@
 #ifndef SLIPSTREAM_MD_MSG_CONTROLLER_H
 #define SLIPSTREAM_MD_MSG_CONTROLLER_H
 
-#include "message_processor.h"
+#include "client_transport.h"
 #include "socket.h"
 
 #include <cstdint>
 
-class MDMsgController final : public IMsgController {
+class MDMsgController final : public IClientTransport {
 public:
     MDMsgController(const char* host, std::uint16_t port);
 

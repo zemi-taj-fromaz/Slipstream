@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "md_msg_controller.h"
 #include "message_processor.h"
+#include "process_rows.h"
 #include "replay_start.h"
 
 #include <exception>
@@ -38,11 +39,11 @@ int main(int argc, char* argv[]) {
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/expected_quotes.csv";
             CanonicalFileMsgController expected_events{expected_path.c_str()};
-            FanoutMsgController controller{expected_events, md_controller};
             replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,
-                controller,
-                options.start_at_ns);
+                md_controller,
+                options.start_at_ns,
+                &expected_events);
         } else {
             replay_result = ProcessRowsByTimestamp<EventType::Quote>(
                 events,

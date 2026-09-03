@@ -1,7 +1,7 @@
 #ifndef SLIPSTREAM_OE_CLIENT_MSG_CONTROLLER_H
 #define SLIPSTREAM_OE_CLIENT_MSG_CONTROLLER_H
 
-#include "message_processor.h"
+#include "client_transport.h"
 #include "slipstream_codec/market_data_codec.h"
 #include "socket.h"
 
@@ -12,7 +12,7 @@
 
 #include <spdlog/logger.h>
 
-class OEClientMsgController final : public IMsgController {
+class OEClientMsgController final : public IClientTransport {
 public:
     OEClientMsgController(
         const char* host,
