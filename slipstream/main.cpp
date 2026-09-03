@@ -20,7 +20,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-#include "NetworkManager.h"
+#include "transport/TcpPollServerTransport.h"
 #include "Engine.h"
 
 #include <thread>
@@ -145,18 +145,19 @@ int main(int argc, char* argv[]) {
         slipstream::OrderEntryQueue egress;
         std::atomic<std::uint64_t> ingress_generation{0};
 
-        slipstream::NetworkManager network_manager{
+        slipstream::TcpPollServerTransport transport{
             slipstream_config,
             ingress,
             egress,
             ingress_generation};
+        slipstream::IServerTransport& server_transport = transport;
         Engine engine{
             slipstream_config,
             ingress,
             egress,
             ingress_generation,
-            [&network_manager] {
-                network_manager.SignalEvent();
+            [&server_transport] {
+                server_transport.NotifyOutboundReady();
             }};
 
         std::exception_ptr network_error;
@@ -164,7 +165,7 @@ int main(int argc, char* argv[]) {
 
         std::jthread network_thread{[&] {
             try {
-                network_manager.Run();
+                server_transport.Run();
             } catch (...) {
                 network_error = std::current_exception();
             }
@@ -191,7 +192,7 @@ int main(int argc, char* argv[]) {
 
         ExecutionReport execution_report = engine.GetExecutionReport();
         execution_report.tick_to_order =
-            network_manager.GetTickToOrderStatistics();
+            transport.GetTickToOrderStatistics();
 
         const std::string report = FormatExecutionReport(
             execution_report,

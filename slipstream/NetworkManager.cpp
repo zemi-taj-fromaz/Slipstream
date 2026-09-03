@@ -263,7 +263,7 @@ namespace slipstream {
 
     void NetworkManager::recvSessionControl(utils::Socket<utils::SockType::Udp>& client) {
 
-        std::array<std::byte, 64> recv_buffer;
+        std::array<std::byte, 64> recv_buffer{};
 
         while (true) {
             const ::ssize_t recvd = client.RecvDatagram(recv_buffer);

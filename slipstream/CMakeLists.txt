@@ -4,13 +4,19 @@ add_executable(slipstream
     Engine.h
     ExecutionReport.cpp
     ExecutionReport.h
-    NetworkManager.cpp
-    NetworkManager.h
     Queues.h
     TradeManager.cpp
     TradeManager.h
     VwapWindow.cpp
     VwapWindow.h
+    transport/IServerTransport.h
+    transport/TcpPollServerTransport.cpp
+    transport/TcpPollServerTransport.h
+)
+
+target_include_directories(slipstream
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(slipstream
