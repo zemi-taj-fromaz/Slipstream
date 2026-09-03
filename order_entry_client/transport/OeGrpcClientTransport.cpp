@@ -1,5 +1,7 @@
 #include "OeGrpcClientTransport.h"
 
+#include <grpc/support/time.h>
+
 #include <chrono>
 #include <stdexcept>
 #include <utility>
@@ -96,12 +98,24 @@ utils::ConnectionResult OeGrpcClientTransport::Send(
 utils::ConnectionResult OeGrpcClientTransport::ProcessInboundUntil(
     const std::chrono::steady_clock::time_point deadline) {
     while (!peer_disconnected_) {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline) {
+            return utils::ConnectionResult::Complete;
+        }
+
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                deadline - now);
+        const gpr_timespec grpc_deadline = gpr_time_add(
+            gpr_now(GPR_CLOCK_MONOTONIC),
+            gpr_time_from_nanos(remaining.count(), GPR_TIMESPAN));
+
         void* raw_tag = nullptr;
         bool ok = false;
         const auto result = completion_queue_.AsyncNext(
             &raw_tag,
             &ok,
-            deadline);
+            grpc_deadline);
         if (result == grpc::CompletionQueue::TIMEOUT) {
             return utils::ConnectionResult::Complete;
         }
