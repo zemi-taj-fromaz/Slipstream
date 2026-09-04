@@ -149,10 +149,8 @@ TEST(MulticastMarketDataCodec, EncodesSequenceBeforeExistingFrame) {
     std::array<std::byte, max_multicast_datagram_size> storage{};
 
     const std::size_t bytes_written = EncodeMulticastMarketData(
-        MulticastMarketDataDatagram{
-            .header = {.sequence = sequence},
-            .event = event,
-        },
+        sequence,
+        event,
         storage);
 
     const std::array<std::byte, multicast_header_size> expected_header{
@@ -177,7 +175,10 @@ TEST(MulticastMarketDataCodec, RoundTripsDatagram) {
     };
     std::array<std::byte, max_multicast_datagram_size> storage{};
     const std::size_t bytes_written =
-        EncodeMulticastMarketData(expected, storage);
+        EncodeMulticastMarketData(
+            expected.header.sequence,
+            expected.event,
+            storage);
     MulticastMarketDataDatagram decoded{};
 
     const MulticastDecodeResult result = DecodeMulticastMarketData(
@@ -199,7 +200,10 @@ TEST(MulticastMarketDataCodec, RejectsTruncatedDatagram) {
     };
     std::array<std::byte, max_multicast_datagram_size> storage{};
     const std::size_t bytes_written =
-        EncodeMulticastMarketData(message, storage);
+        EncodeMulticastMarketData(
+            message.header.sequence,
+            message.event,
+            storage);
 
     for (std::size_t size = 0; size < bytes_written; ++size) {
         SCOPED_TRACE(size);
@@ -221,7 +225,10 @@ TEST(MulticastMarketDataCodec, RejectsTrailingBytes) {
     };
     std::array<std::byte, max_multicast_datagram_size + 1> storage{};
     const std::size_t bytes_written =
-        EncodeMulticastMarketData(message, storage);
+        EncodeMulticastMarketData(
+            message.header.sequence,
+            message.event,
+            storage);
     MulticastMarketDataDatagram decoded{};
 
     const MulticastDecodeResult result = DecodeMulticastMarketData(

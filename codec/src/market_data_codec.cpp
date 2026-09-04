@@ -262,7 +262,8 @@ DecodeResult DecodeMarketEvent(std::span<const std::byte> input, MarketEvent& ou
 }
 
 std::size_t EncodeMulticastMarketData(
-    const MulticastMarketDataDatagram& datagram,
+    std::uint64_t sequence,
+    const MarketEvent& event,
     std::span<std::byte> output) {
     if (output.size() < multicast_header_size) {
         throw std::runtime_error("output buffer too small for multicast header");
@@ -270,10 +271,10 @@ std::size_t EncodeMulticastMarketData(
 
     writeUint64LittleEndian(
         output.first(multicast_header_size),
-        datagram.header.sequence);
+        sequence);
 
     const std::size_t frame_size = EncodeMarketEvent(
-        datagram.event,
+        event,
         output.subspan(multicast_header_size));
     return multicast_header_size + frame_size;
 }

@@ -4,6 +4,8 @@ add_executable(market_data_client
     transport/MdGrpcClientTransport.h
     transport/MdTcpClientTransport.cpp
     transport/MdTcpClientTransport.h
+    transport/MdUdpMulticastClientTransport.cpp
+    transport/MdUdpMulticastClientTransport.h
 )
 
 target_link_libraries(market_data_client

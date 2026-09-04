@@ -150,7 +150,8 @@ struct MulticastDecodeResult {
     MarketEvent& output);
 
 [[nodiscard]] std::size_t EncodeMulticastMarketData(
-    const MulticastMarketDataDatagram& datagram,
+    std::uint64_t sequence,
+    const MarketEvent& event,
     std::span<std::byte> output);
 
 [[nodiscard]] MulticastDecodeResult DecodeMulticastMarketData(
