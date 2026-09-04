@@ -22,6 +22,7 @@
 
 #include "transport/TcpPollServerTransport.h"
 #include "transport/GrpcServerTransport.h"
+#include "transport/UdpMulticastServerTransport.h"
 #include "Engine.h"
 #include "slipstream.grpc.pb.h"
 
@@ -105,6 +106,27 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
                     NextValue(),
                     option);
 
+        } else if (option == "--md-a-group") {
+            config.md_a_group = NextValue();
+
+        } else if (option == "--md-a-port") {
+            config.md_a_port =
+                ParseNumber<std::uint16_t>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--md-b-group") {
+            config.md_b_group = NextValue();
+
+        } else if (option == "--md-b-port") {
+            config.md_b_port =
+                ParseNumber<std::uint16_t>(
+                    NextValue(),
+                    option);
+
+        } else if (option == "--md-multicast-interface") {
+            config.md_multicast_interface = NextValue();
+
         } else if (option == "--oe-host") {
             config.oe_host = NextValue();
 
@@ -124,9 +146,12 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
         }
     }
 
-    if (config.md_port == 0 || config.oe_port == 0) {
+    if (config.md_port == 0 ||
+        config.md_a_port == 0 ||
+        config.md_b_port == 0 ||
+        config.oe_port == 0) {
         throw std::invalid_argument(
-            "MD and OE ports must be greater than zero");
+            "MD, multicast, and OE ports must be greater than zero");
     }
 
     return config;
@@ -163,9 +188,16 @@ int main(int argc, char* argv[]) {
                     ingress,
                     egress,
                     ingress_generation);
+        } else if (slipstream_config.transport == "udp-multicast") {
+            server_transport =
+                std::make_unique<slipstream::UdpMulticastServerTransport>(
+                    slipstream_config,
+                    ingress,
+                    egress,
+                    ingress_generation);
         } else {
             throw std::invalid_argument(
-                "--transport must be tcp or grpc");
+                "--transport must be tcp, grpc, or udp-multicast");
         }
 
         Engine engine{

@@ -52,9 +52,11 @@ ReplayClientOptions ParseReplayClientOptions(
             options.host = value;
             has_host = true;
         } else if (option == "--transport") {
-            if (value != "tcp" && value != "grpc") {
+            if (value != "tcp" &&
+                value != "grpc" &&
+                value != "udp-multicast") {
                 throw std::invalid_argument(
-                    "--transport must be tcp or grpc");
+                    "--transport must be tcp, grpc, or udp-multicast");
             }
             options.transport = value;
         } else if (option == "--port") {
@@ -68,6 +70,28 @@ ReplayClientOptions ParseReplayClientOptions(
         } else if (option == "--start-at-ns") {
             options.start_at_ns = ParseUnsigned(value, option);
             has_start = true;
+        } else if (option == "--md-a-group") {
+            options.md_a_group = value;
+        } else if (option == "--md-a-port") {
+            const std::uint64_t port = ParseUnsigned(value, option);
+            if (port == 0 ||
+                port > std::numeric_limits<std::uint16_t>::max()) {
+                throw std::invalid_argument(
+                    "--md-a-port must be in [1, 65535]");
+            }
+            options.md_a_port = static_cast<std::uint16_t>(port);
+        } else if (option == "--md-b-group") {
+            options.md_b_group = value;
+        } else if (option == "--md-b-port") {
+            const std::uint64_t port = ParseUnsigned(value, option);
+            if (port == 0 ||
+                port > std::numeric_limits<std::uint16_t>::max()) {
+                throw std::invalid_argument(
+                    "--md-b-port must be in [1, 65535]");
+            }
+            options.md_b_port = static_cast<std::uint16_t>(port);
+        } else if (option == "--md-multicast-interface") {
+            options.md_multicast_interface = value;
         } else {
             throw std::invalid_argument(
                 "unknown client option: " + std::string{option});
@@ -79,7 +103,12 @@ ReplayClientOptions ParseReplayClientOptions(
             "usage: " + std::string{argv[0]} +
             " --host <IPv4-address> --port <port> "
             "--start-at-ns <unix-nanoseconds> "
-            "[--transport tcp|grpc]");
+            "[--transport tcp|grpc|udp-multicast] "
+            "[--md-a-group <IPv4-multicast-address>] "
+            "[--md-a-port <port>] "
+            "[--md-b-group <IPv4-multicast-address>] "
+            "[--md-b-port <port>] "
+            "[--md-multicast-interface <IPv4-address>]");
     }
 
     return options;

@@ -5,6 +5,7 @@
 #include "slipstream.grpc.pb.h"
 #include "transport/MdGrpcClientTransport.h"
 #include "transport/MdTcpClientTransport.h"
+#include "transport/MdUdpMulticastClientTransport.h"
 
 #include <exception>
 #include <memory>
@@ -38,6 +39,13 @@ int main(int argc, char* argv[]) {
             transport = std::make_unique<MdGrpcClientTransport>(
                 options.host,
                 options.port);
+        } else if (options.transport == "udp-multicast") {
+            transport = std::make_unique<MdUdpMulticastClientTransport>(
+                options.md_a_group,
+                options.md_a_port,
+                options.md_b_group,
+                options.md_b_port,
+                options.md_multicast_interface);
         } else {
             transport = std::make_unique<MdTcpClientTransport>(
                 options.host.c_str(),

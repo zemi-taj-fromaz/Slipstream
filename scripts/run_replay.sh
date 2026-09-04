@@ -11,6 +11,11 @@ md_port="9001"
 oe_host="127.0.0.1"
 oe_port="9002"
 transport="tcp"
+md_a_group="239.255.0.1"
+md_a_port="14200"
+md_b_group="239.255.0.2"
+md_b_port="14201"
+md_multicast_interface="0.0.0.0"
 server_args=()
 
 while (($# > 0)); do
@@ -39,6 +44,26 @@ while (($# > 0)); do
             transport="$2"
             shift 2
             ;;
+        --md-a-group)
+            md_a_group="$2"
+            shift 2
+            ;;
+        --md-a-port)
+            md_a_port="$2"
+            shift 2
+            ;;
+        --md-b-group)
+            md_b_group="$2"
+            shift 2
+            ;;
+        --md-b-port)
+            md_b_port="$2"
+            shift 2
+            ;;
+        --md-multicast-interface)
+            md_multicast_interface="$2"
+            shift 2
+            ;;
         *)
             server_args+=("$1")
             shift
@@ -52,6 +77,11 @@ server_args+=(
     --oe-host "${oe_host}"
     --oe-port "${oe_port}"
     --transport "${transport}"
+    --md-a-group "${md_a_group}"
+    --md-a-port "${md_a_port}"
+    --md-b-group "${md_b_group}"
+    --md-b-port "${md_b_port}"
+    --md-multicast-interface "${md_multicast_interface}"
 )
 
 server="${build_dir}/slipstream/slipstream"
@@ -101,13 +131,23 @@ echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
     --host "${md_host}" \
     --port "${md_port}" \
     --transport "${transport}" \
+    --md-a-group "${md_a_group}" \
+    --md-a-port "${md_a_port}" \
+    --md-b-group "${md_b_group}" \
+    --md-b-port "${md_b_port}" \
+    --md-multicast-interface "${md_multicast_interface}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
+
+oe_transport="${transport}"
+if [[ "${transport}" == "udp-multicast" ]]; then
+    oe_transport="tcp"
+fi
 
 "${oe_client}" \
     --host "${oe_host}" \
     --port "${oe_port}" \
-    --transport "${transport}" \
+    --transport "${oe_transport}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 
