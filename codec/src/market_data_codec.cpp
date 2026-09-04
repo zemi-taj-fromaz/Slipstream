@@ -261,6 +261,48 @@ DecodeResult DecodeMarketEvent(std::span<const std::byte> input, MarketEvent& ou
     return {DecodeStatus::error, 0};
 }
 
+std::size_t EncodeMulticastMarketData(
+    const MulticastMarketDataDatagram& datagram,
+    std::span<std::byte> output) {
+    if (output.size() < multicast_header_size) {
+        throw std::runtime_error("output buffer too small for multicast header");
+    }
+
+    writeUint64LittleEndian(
+        output.first(multicast_header_size),
+        datagram.header.sequence);
+
+    const std::size_t frame_size = EncodeMarketEvent(
+        datagram.event,
+        output.subspan(multicast_header_size));
+    return multicast_header_size + frame_size;
+}
+
+DecodeResult DecodeMulticastMarketData(
+    std::span<const std::byte> input,
+    MulticastMarketDataDatagram& output) {
+    if (input.size() < multicast_header_size) {
+        return {DecodeStatus::error, 0};
+    }
+
+    const DecodeResult frame_result = DecodeMarketEvent(
+        input.subspan(multicast_header_size),
+        output.event);
+    if (frame_result.status != DecodeStatus::message_ready) {
+        return {DecodeStatus::error, 0};
+    }
+
+    const std::size_t datagram_size =
+        multicast_header_size + frame_result.bytes_consumed;
+    if (input.size() != datagram_size) {
+        return {DecodeStatus::error, 0};
+    }
+
+    output.header.sequence = readUint64LittleEndian(
+        input.first(multicast_header_size));
+    return {DecodeStatus::message_ready, datagram_size};
+}
+
 std::size_t EncodeHeartbeat(
     const HeartbeatMessage& message,
     std::span<std::byte> output) {

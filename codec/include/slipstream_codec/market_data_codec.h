@@ -30,8 +30,20 @@ constexpr std::size_t new_order_body_size = 50;
 constexpr std::size_t exec_report_body_size = 30;
 constexpr std::size_t max_market_data_frame_size =
     frame_header_size + quote_body_size;
+constexpr std::size_t multicast_header_size = sizeof(std::uint64_t);
+constexpr std::size_t max_multicast_datagram_size =
+    multicast_header_size + max_market_data_frame_size;
 constexpr std::size_t max_order_frame_size =
     frame_header_size + new_order_body_size;
+
+struct MulticastHeader {
+    std::uint64_t sequence{0};
+};
+
+struct MulticastMarketDataDatagram {
+    MulticastHeader header{};
+    MarketEvent event{};
+};
 
 struct HeartbeatMessage {
     std::uint64_t ts_ns{0};
@@ -123,6 +135,14 @@ struct StreamDecodeResult {
 [[nodiscard]] DecodeResult DecodeMarketEvent(
     std::span<const std::byte> input,
     MarketEvent& output);
+
+[[nodiscard]] std::size_t EncodeMulticastMarketData(
+    const MulticastMarketDataDatagram& datagram,
+    std::span<std::byte> output);
+
+[[nodiscard]] DecodeResult DecodeMulticastMarketData(
+    std::span<const std::byte> input,
+    MulticastMarketDataDatagram& output);
 
 [[nodiscard]] std::size_t EncodeHeartbeat(
     const HeartbeatMessage& message,

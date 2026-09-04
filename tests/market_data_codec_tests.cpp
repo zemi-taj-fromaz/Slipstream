@@ -142,6 +142,93 @@ TEST(MarketDataCodec, RoundTripsNegativeFixedPointPrice) {
     ExpectSameEvent(expected, decoded);
 }
 
+TEST(MulticastMarketDataCodec, EncodesSequenceBeforeExistingFrame) {
+    constexpr std::uint64_t sequence = 0x0102030405060708ULL;
+    const MarketEvent event = MakeQuote();
+    const auto frame = Encode(event);
+    std::array<std::byte, max_multicast_datagram_size> storage{};
+
+    const std::size_t bytes_written = EncodeMulticastMarketData(
+        MulticastMarketDataDatagram{
+            .header = {.sequence = sequence},
+            .event = event,
+        },
+        storage);
+
+    const std::array<std::byte, multicast_header_size> expected_header{
+        std::byte{0x08}, std::byte{0x07}, std::byte{0x06}, std::byte{0x05},
+        std::byte{0x04}, std::byte{0x03}, std::byte{0x02}, std::byte{0x01},
+    };
+    EXPECT_EQ(bytes_written, multicast_header_size + frame.size());
+    EXPECT_TRUE(std::equal(
+        expected_header.begin(),
+        expected_header.end(),
+        storage.begin()));
+    EXPECT_TRUE(std::equal(
+        frame.begin(),
+        frame.end(),
+        storage.begin() + static_cast<std::ptrdiff_t>(multicast_header_size)));
+}
+
+TEST(MulticastMarketDataCodec, RoundTripsDatagram) {
+    const MulticastMarketDataDatagram expected{
+        .header = {.sequence = 42},
+        .event = MakeQuote(),
+    };
+    std::array<std::byte, max_multicast_datagram_size> storage{};
+    const std::size_t bytes_written =
+        EncodeMulticastMarketData(expected, storage);
+    MulticastMarketDataDatagram decoded{};
+
+    const DecodeResult result = DecodeMulticastMarketData(
+        std::span<const std::byte>{storage}.first(bytes_written),
+        decoded);
+
+    ASSERT_EQ(result.status, DecodeStatus::message_ready);
+    EXPECT_EQ(result.bytes_consumed, bytes_written);
+    EXPECT_EQ(decoded.header.sequence, expected.header.sequence);
+    ExpectSameEvent(expected.event, decoded.event);
+}
+
+TEST(MulticastMarketDataCodec, RejectsTruncatedDatagram) {
+    const MulticastMarketDataDatagram message{
+        .header = {.sequence = 7},
+        .event = MakeQuote(),
+    };
+    std::array<std::byte, max_multicast_datagram_size> storage{};
+    const std::size_t bytes_written =
+        EncodeMulticastMarketData(message, storage);
+
+    for (std::size_t size = 0; size < bytes_written; ++size) {
+        SCOPED_TRACE(size);
+        MulticastMarketDataDatagram decoded{};
+        const DecodeResult result = DecodeMulticastMarketData(
+            std::span<const std::byte>{storage}.first(size),
+            decoded);
+
+        EXPECT_EQ(result.status, DecodeStatus::error);
+        EXPECT_EQ(result.bytes_consumed, 0U);
+    }
+}
+
+TEST(MulticastMarketDataCodec, RejectsTrailingBytes) {
+    const MulticastMarketDataDatagram message{
+        .header = {.sequence = 9},
+        .event = MakeQuote(),
+    };
+    std::array<std::byte, max_multicast_datagram_size + 1> storage{};
+    const std::size_t bytes_written =
+        EncodeMulticastMarketData(message, storage);
+    MulticastMarketDataDatagram decoded{};
+
+    const DecodeResult result = DecodeMulticastMarketData(
+        std::span<const std::byte>{storage}.first(bytes_written + 1),
+        decoded);
+
+    EXPECT_EQ(result.status, DecodeStatus::error);
+    EXPECT_EQ(result.bytes_consumed, 0U);
+}
+
 TEST(MarketDataCodec, RejectsOutputBufferThatIsTooSmall) {
     std::array<std::byte, 47> output{};
     EXPECT_THROW(
