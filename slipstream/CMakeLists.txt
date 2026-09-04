@@ -14,6 +14,8 @@ add_executable(slipstream
     transport/IServerTransport.h
     transport/TcpPollServerTransport.cpp
     transport/TcpPollServerTransport.h
+    transport/UdpMulticastServerTransport.cpp
+    transport/UdpMulticastServerTransport.h
 )
 
 target_include_directories(slipstream

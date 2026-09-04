@@ -128,6 +128,19 @@ struct StreamDecodeResult {
     std::size_t messages_decoded{0};
 };
 
+enum class MulticastDecodeStatus {
+    message_ready,
+    duplicate,
+    sequence_gap,
+    error,
+};
+
+struct MulticastDecodeResult {
+    MulticastDecodeStatus status{MulticastDecodeStatus::error};
+    std::size_t bytes_consumed{0};
+    std::uint64_t sequence{0};
+};
+
 [[nodiscard]] std::size_t EncodeMarketEvent(
     const MarketEvent& event,
     std::span<std::byte> output);
@@ -140,8 +153,9 @@ struct StreamDecodeResult {
     const MulticastMarketDataDatagram& datagram,
     std::span<std::byte> output);
 
-[[nodiscard]] DecodeResult DecodeMulticastMarketData(
+[[nodiscard]] MulticastDecodeResult DecodeMulticastMarketData(
     std::span<const std::byte> input,
+    std::uint64_t expected_sequence,
     MulticastMarketDataDatagram& output);
 
 [[nodiscard]] std::size_t EncodeHeartbeat(

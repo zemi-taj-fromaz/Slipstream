@@ -278,29 +278,42 @@ std::size_t EncodeMulticastMarketData(
     return multicast_header_size + frame_size;
 }
 
-DecodeResult DecodeMulticastMarketData(
+MulticastDecodeResult DecodeMulticastMarketData(
     std::span<const std::byte> input,
+    std::uint64_t expected_sequence,
     MulticastMarketDataDatagram& output) {
     if (input.size() < multicast_header_size) {
-        return {DecodeStatus::error, 0};
+        return {MulticastDecodeStatus::error, 0, 0};
+    }
+
+    const std::uint64_t sequence = readUint64LittleEndian(
+        input.first(multicast_header_size));
+    if (sequence < expected_sequence) {
+        return {MulticastDecodeStatus::duplicate, 0, sequence};
+    }
+    if (sequence > expected_sequence) {
+        return {MulticastDecodeStatus::sequence_gap, 0, sequence};
     }
 
     const DecodeResult frame_result = DecodeMarketEvent(
         input.subspan(multicast_header_size),
         output.event);
     if (frame_result.status != DecodeStatus::message_ready) {
-        return {DecodeStatus::error, 0};
+        return {MulticastDecodeStatus::error, 0, sequence};
     }
 
     const std::size_t datagram_size =
         multicast_header_size + frame_result.bytes_consumed;
     if (input.size() != datagram_size) {
-        return {DecodeStatus::error, 0};
+        return {MulticastDecodeStatus::error, 0, sequence};
     }
 
-    output.header.sequence = readUint64LittleEndian(
-        input.first(multicast_header_size));
-    return {DecodeStatus::message_ready, datagram_size};
+    output.header.sequence = sequence;
+    return {
+        MulticastDecodeStatus::message_ready,
+        datagram_size,
+        sequence,
+    };
 }
 
 std::size_t EncodeHeartbeat(
