@@ -16,6 +16,10 @@ public:
     [[nodiscard]]
     virtual TickToOrderStatistics
     GetTickToOrderStatistics() const = 0;
+
+    [[nodiscard]]
+    virtual const TickToOrderHistogram&
+    GetTickToOrderHistogram() const noexcept = 0;
 };
 
 }

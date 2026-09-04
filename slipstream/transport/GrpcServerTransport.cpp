@@ -454,9 +454,7 @@ GrpcServerTransport::GrpcServerTransport(
     : config_{config},
       ingress_{ingress},
       egress_{egress},
-      ingress_generation_{ingress_generation} {
-    tick_to_order_samples_.reserve(10'000);
-}
+      ingress_generation_{ingress_generation} {}
 
 GrpcServerTransport::~GrpcServerTransport() {
     Stop();
@@ -563,7 +561,12 @@ void GrpcServerTransport::NotifyOutboundReady() {
 
 TickToOrderStatistics
 GrpcServerTransport::GetTickToOrderStatistics() const {
-    return CalculateTickToOrderStatistics(tick_to_order_samples_);
+    return tick_to_order_histogram_.GetStatistics();
+}
+
+const TickToOrderHistogram&
+GrpcServerTransport::GetTickToOrderHistogram() const noexcept {
+    return tick_to_order_histogram_;
 }
 
 void GrpcServerTransport::dispatchCompletion(void* raw_tag, const bool ok) {
@@ -721,7 +724,7 @@ void GrpcServerTransport::recordTickToOrder(
     }
 
     if (send_started_at_ns >= trigger_received_at_ns) {
-        tick_to_order_samples_.push_back(
+        tick_to_order_histogram_.Record(
             send_started_at_ns - trigger_received_at_ns);
     }
 }

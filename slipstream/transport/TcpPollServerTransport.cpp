@@ -44,7 +44,6 @@ TcpPollServerTransport::TcpPollServerTransport(
             "eventfd() failed");
     }
 
-    tick_to_order_samples.reserve(10'000);
 }
 
 TcpPollServerTransport::TcpPollServerTransport(
@@ -378,7 +377,7 @@ void TcpPollServerTransport::flushSendQueue(
 
         if (frame.measure_tick_to_order) {
             if (send_started_at_ns >= frame.trigger_received_at_ns) {
-                tick_to_order_samples.push_back(
+                tick_to_order_histogram.Record(
                     send_started_at_ns - frame.trigger_received_at_ns);
             }
         }
@@ -389,7 +388,12 @@ void TcpPollServerTransport::flushSendQueue(
 
 TickToOrderStatistics
 TcpPollServerTransport::GetTickToOrderStatistics() const {
-    return CalculateTickToOrderStatistics(tick_to_order_samples);
+    return tick_to_order_histogram.GetStatistics();
+}
+
+const TickToOrderHistogram&
+TcpPollServerTransport::GetTickToOrderHistogram() const noexcept {
+    return tick_to_order_histogram;
 }
 
 void TcpPollServerTransport::markOeActivity() {

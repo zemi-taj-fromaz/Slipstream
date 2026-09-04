@@ -43,7 +43,6 @@ namespace slipstream {
                 std::generic_category(),
                 "eventfd() failed");
         }
-        tick_to_order_samples.reserve(10'000);
     }
 
     NetworkManager::NetworkManager(
@@ -375,7 +374,7 @@ namespace slipstream {
             if (frame.measure_tick_to_order) {
                 const std::uint64_t sent_at_ns = MonotonicNowNs();
                 if (sent_at_ns >= frame.trigger_received_at_ns) {
-                    tick_to_order_samples.push_back(
+                    tick_to_order_histogram.Record(
                         sent_at_ns - frame.trigger_received_at_ns);
                 }
             }
@@ -384,7 +383,7 @@ namespace slipstream {
     }
 
     TickToOrderStatistics NetworkManager::GetTickToOrderStatistics() const {
-        return CalculateTickToOrderStatistics(tick_to_order_samples);
+        return tick_to_order_histogram.GetStatistics();
     }
 
     void NetworkManager::markOeActivity() {

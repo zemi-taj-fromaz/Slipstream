@@ -12,7 +12,6 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
-#include <vector>
 
 class IMsgController;
 
@@ -39,6 +38,10 @@ public:
 
     [[nodiscard]]
     TickToOrderStatistics GetTickToOrderStatistics() const override;
+
+    [[nodiscard]]
+    const TickToOrderHistogram&
+    GetTickToOrderHistogram() const noexcept override;
 
 private:
     void resetWakeNotif();
@@ -69,7 +72,7 @@ private:
     codec::MarketEventDecoder oe_decoder{};
 
     std::deque<EncodedFrame> send_queue;
-    std::vector<std::uint64_t> tick_to_order_samples;
+    TickToOrderHistogram tick_to_order_histogram;
     int wake_fd{-1};
 
     std::chrono::steady_clock::time_point last_oe_activity{};

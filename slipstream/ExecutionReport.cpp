@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <iomanip>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -30,6 +31,67 @@ std::string FormatPrice(const std::int64_t price) {
     return output.str();
 }
 
+}
+
+void TickToOrderHistogram::Record(const std::uint64_t latency_ns) noexcept {
+    const std::size_t bucket = static_cast<std::size_t>(
+        latency_ns / bucket_width_ns);
+    ++sample_count_;
+
+    if (bucket >= buckets_.size()) {
+        ++overflow_count_;
+        return;
+    }
+
+    ++buckets_[bucket];
+}
+
+TickToOrderStatistics
+TickToOrderHistogram::GetStatistics() const noexcept {
+    if (sample_count_ == 0) {
+        return {};
+    }
+
+    const auto percentile = [this](
+        const std::uint64_t numerator,
+        const std::uint64_t denominator) {
+        const std::uint64_t rank =
+            (sample_count_ * numerator + denominator - 1) /
+            denominator;
+        std::uint64_t cumulative{};
+
+        for (std::size_t bucket = 0; bucket < buckets_.size(); ++bucket) {
+            cumulative += buckets_[bucket];
+            if (cumulative >= rank) {
+                return static_cast<std::uint64_t>(bucket) *
+                       bucket_width_ns;
+            }
+        }
+
+        return static_cast<std::uint64_t>(bucket_count) *
+               bucket_width_ns;
+    };
+
+    return {
+        .p50_ns = percentile(50, 100),
+        .p99_ns = percentile(99, 100),
+        .p999_ns = percentile(999, 1'000),
+        .sample_count = static_cast<std::size_t>(sample_count_),
+        .overflow_count = overflow_count_,
+    };
+}
+
+void TickToOrderHistogram::WriteCsv(std::ostream& output) const {
+    output << "bucket_lower_us,bucket_upper_us,count,overflow\n";
+    for (std::size_t bucket = 0; bucket < buckets_.size(); ++bucket) {
+        output
+            << bucket << ','
+            << bucket + 1 << ','
+            << buckets_[bucket] << ",false\n";
+    }
+    output
+        << bucket_count << ",," << overflow_count_
+        << ",true\n";
 }
 
 TickToOrderStatistics CalculateTickToOrderStatistics(
@@ -155,6 +217,8 @@ std::string FormatExecutionReport(
     }
     output << std::left << std::setw(20) << "latency samples"
            << report.tick_to_order.sample_count << '\n';
+    output << std::left << std::setw(20) << "latency >= 5000 us"
+           << report.tick_to_order.overflow_count << '\n';
 
     return output.str();
 }

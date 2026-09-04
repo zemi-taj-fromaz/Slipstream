@@ -3,8 +3,10 @@
 
 #include "SlipstreamConfig.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iosfwd>
 #include <span>
 #include <string>
 
@@ -13,6 +15,25 @@ struct TickToOrderStatistics {
     std::uint64_t p99_ns{};
     std::uint64_t p999_ns{};
     std::size_t sample_count{};
+    std::uint64_t overflow_count{};
+};
+
+class TickToOrderHistogram {
+public:
+    static constexpr std::uint64_t bucket_width_ns = 1'000;
+    static constexpr std::size_t bucket_count = 5'000;
+
+    void Record(std::uint64_t latency_ns) noexcept;
+
+    [[nodiscard]]
+    TickToOrderStatistics GetStatistics() const noexcept;
+
+    void WriteCsv(std::ostream& output) const;
+
+private:
+    std::array<std::uint32_t, bucket_count> buckets_{};
+    std::uint64_t overflow_count_{};
+    std::uint64_t sample_count_{};
 };
 
 struct ExecutionReport {

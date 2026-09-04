@@ -229,10 +229,27 @@ int main(int argc, char* argv[]) {
                 "failed to write execution report file");
         }
 
+        std::ofstream histogram_file{
+            SLIPSTREAM_TICK_TO_ORDER_HISTOGRAM_PATH,
+            std::ios::trunc};
+        if (!histogram_file) {
+            throw std::runtime_error(
+                "failed to open tick-to-order histogram file");
+        }
+
+        server_transport->GetTickToOrderHistogram().WriteCsv(histogram_file);
+        if (!histogram_file) {
+            throw std::runtime_error(
+                "failed to write tick-to-order histogram file");
+        }
+
         std::cout << report << std::flush;
         logger.info(
             "Execution report written to {}",
             SLIPSTREAM_EXECUTION_REPORT_PATH);
+        logger.info(
+            "Tick-to-order histogram written to {}",
+            SLIPSTREAM_TICK_TO_ORDER_HISTOGRAM_PATH);
 
         return 0;
     } catch (const std::exception& error) {

@@ -16,7 +16,6 @@
 #include "EncodedFrame.h"
 #include <sys/eventfd.h>
 #include <unistd.h>
-#include <vector>
 
 
 class IMsgController;
@@ -69,7 +68,7 @@ namespace slipstream {
        // codec::SessionControlDecoder session_control_decoder{};
 
         std::deque<EncodedFrame> send_queue;
-        std::vector<std::uint64_t> tick_to_order_samples;
+        TickToOrderHistogram tick_to_order_histogram;
         int wake_fd{-1};
 
         std::chrono::steady_clock::time_point last_oe_activity{};

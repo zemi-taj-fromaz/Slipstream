@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,38 @@ TEST(ExecutionReport, FormatsTickToOrderStatisticsInMicroseconds) {
         std::string::npos);
     EXPECT_NE(
         output.find("latency samples     100"),
+        std::string::npos);
+}
+
+TEST(ExecutionReport, AggregatesTickToOrderHistogram) {
+    TickToOrderHistogram histogram;
+    histogram.Record(100);
+    histogram.Record(1'500);
+    histogram.Record(2'500);
+    histogram.Record(6'000'000);
+
+    const TickToOrderStatistics statistics = histogram.GetStatistics();
+
+    EXPECT_EQ(statistics.p50_ns, 1'000U);
+    EXPECT_EQ(statistics.p99_ns, 5'000'000U);
+    EXPECT_EQ(statistics.p999_ns, 5'000'000U);
+    EXPECT_EQ(statistics.sample_count, 4U);
+    EXPECT_EQ(statistics.overflow_count, 1U);
+}
+
+TEST(ExecutionReport, WritesTickToOrderHistogramCsv) {
+    TickToOrderHistogram histogram;
+    histogram.Record(1'500);
+    histogram.Record(6'000'000);
+
+    std::ostringstream output;
+    histogram.WriteCsv(output);
+
+    EXPECT_NE(
+        output.str().find("1,2,1,false"),
+        std::string::npos);
+    EXPECT_NE(
+        output.str().find("5000,,1,true"),
         std::string::npos);
 }
 

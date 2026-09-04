@@ -17,7 +17,6 @@
 #include <memory>
 #include <mutex>
 #include <string_view>
-#include <vector>
 
 namespace slipstream {
 
@@ -41,6 +40,10 @@ public:
 
     [[nodiscard]]
     TickToOrderStatistics GetTickToOrderStatistics() const override;
+
+    [[nodiscard]]
+    const TickToOrderHistogram&
+    GetTickToOrderHistogram() const noexcept override;
 
 private:
     class CompletionTag;
@@ -93,7 +96,7 @@ private:
     std::chrono::steady_clock::time_point next_heartbeat_{};
     static constexpr auto heartbeat_interval = std::chrono::seconds{5};
 
-    std::vector<std::uint64_t> tick_to_order_samples_;
+    TickToOrderHistogram tick_to_order_histogram_;
 };
 
 }
