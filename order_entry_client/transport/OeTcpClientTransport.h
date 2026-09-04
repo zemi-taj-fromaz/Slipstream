@@ -2,6 +2,7 @@
 #define SLIPSTREAM_OE_TCP_CLIENT_TRANSPORT_H
 
 #include "client_transport.h"
+#include "OeLatencyRecorder.h"
 #include "slipstream_codec/market_data_codec.h"
 #include "socket.h"
 
@@ -17,7 +18,8 @@ public:
     OeTcpClientTransport(
         const char* host,
         std::uint16_t port,
-        spdlog::logger& logger);
+        spdlog::logger& logger,
+        OeLatencyRecorder& latency_recorder);
 
     utils::ConnectionResult Send(const MarketEvent& event) override;
     utils::ConnectionResult ProcessInboundUntil(
@@ -36,6 +38,7 @@ private:
     pollfd poll_descriptor_{};
     slipstream::codec::ClientSideDecoder decoder_;
     spdlog::logger& logger_;
+    OeLatencyRecorder& latency_recorder_;
 };
 
 #endif

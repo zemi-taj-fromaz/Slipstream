@@ -2,6 +2,7 @@
 #define SLIPSTREAM_OE_GRPC_CLIENT_TRANSPORT_H
 
 #include "client_transport.h"
+#include "OeLatencyRecorder.h"
 #include "slipstream.grpc.pb.h"
 
 #include <grpcpp/grpcpp.h>
@@ -19,7 +20,8 @@ public:
     OeGrpcClientTransport(
         const std::string& host,
         std::uint16_t port,
-        spdlog::logger& logger);
+        spdlog::logger& logger,
+        OeLatencyRecorder& latency_recorder);
     ~OeGrpcClientTransport() override;
 
     utils::ConnectionResult Send(const MarketEvent& event) override;
@@ -49,6 +51,7 @@ private:
     void DrainCompletionQueue();
 
     spdlog::logger& logger_;
+    OeLatencyRecorder& latency_recorder_;
     grpc::ClientContext context_;
     grpc::CompletionQueue completion_queue_;
     grpc::Status final_status_;

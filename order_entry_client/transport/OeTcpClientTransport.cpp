@@ -20,8 +20,10 @@ struct Overloaded : Visitors... {
 OeTcpClientTransport::OeTcpClientTransport(
     const char* host,
     std::uint16_t port,
-    spdlog::logger& logger)
-    : logger_{logger} {
+    spdlog::logger& logger,
+    OeLatencyRecorder& latency_recorder)
+    : logger_{logger},
+      latency_recorder_{latency_recorder} {
     constexpr int send_buffer_size = 1024 * 1024;
     socket_.SetTcpNoDelay();
     socket_.SetSendBufferSize(send_buffer_size);
@@ -38,6 +40,13 @@ utils::ConnectionResult OeTcpClientTransport::Send(
     if (sessionState == slipstream::codec::SessionState::close) {
         return utils::ConnectionResult::PeerDisconnected;
     }
+
+    const Trade* trade = std::get_if<Trade>(&event.payload);
+    if (trade == nullptr) {
+        throw std::invalid_argument("OE TCP transport requires a trade");
+    }
+
+    latency_recorder_.RecordSend(trade->id);
 
     std::array<
         std::byte,
@@ -166,6 +175,9 @@ void OeTcpClientTransport::HandleMessage(
     std::visit(
         Overloaded{
             [this](const slipstream::codec::NewOrderMessage& value) {
+                latency_recorder_.RecordConfirmation(
+                    value.trade_id,
+                    static_cast<char>(value.status));
                 logger_.info(
                     "NewOrder {} trade_id={} symbol={} side={} qty={} limit_px={} client_order_id={}",
                     value.status == slipstream::codec::NewOrderStatus::accepted

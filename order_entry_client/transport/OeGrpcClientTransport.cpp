@@ -29,8 +29,10 @@ slipstream::grpc_api::Trade::Aggressor ToGrpcAggressor(
 OeGrpcClientTransport::OeGrpcClientTransport(
     const std::string& host,
     const std::uint16_t port,
-    spdlog::logger& logger)
-    : logger_{logger} {
+    spdlog::logger& logger,
+    OeLatencyRecorder& latency_recorder)
+    : logger_{logger},
+      latency_recorder_{latency_recorder} {
     auto channel = grpc::CreateChannel(
         Address(host, port),
         grpc::InsecureChannelCredentials());
@@ -81,6 +83,8 @@ utils::ConnectionResult OeGrpcClientTransport::Send(
     if (trade == nullptr) {
         throw std::invalid_argument("OE gRPC transport requires a trade");
     }
+
+    latency_recorder_.RecordSend(trade->id);
 
     slipstream::grpc_api::OeClientMessage message;
     auto* output = message.mutable_trade();
@@ -249,6 +253,11 @@ void OeGrpcClientTransport::HandleInbound() {
     switch (inbound_.payload_case()) {
     case slipstream::grpc_api::OeServerMessage::kNewOrder: {
         const auto& value = inbound_.new_order();
+        latency_recorder_.RecordConfirmation(
+            value.trade_id(),
+            value.status() == slipstream::grpc_api::NewOrder::ACCEPTED
+                ? 'A'
+                : 'R');
         logger_.info(
             "NewOrder {} trade_id={} symbol={} side={} qty={} limit_px={} client_order_id={}",
             value.status() == slipstream::grpc_api::NewOrder::ACCEPTED

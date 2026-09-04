@@ -1,6 +1,7 @@
 #include "parser.h"
 
 #include "message_processor.h"
+#include "OeLatencyRecorder.h"
 #include "process_rows.h"
 #include "replay_start.h"
 #include "slipstream.grpc.pb.h"
@@ -38,17 +39,35 @@ int main(int argc, char* argv[]) {
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);
 
+        const std::string oe_transport = options.transport == "grpc"
+            ? "grpc"
+            : "tcp";
+        OeLatencyRecorder latency_recorder{
+            oe_transport,
+            std::string{SLIPSTREAM_OE_LATENCY_DIR} +
+                "/oe_latency_" + oe_transport + ".csv"};
+
+        const auto write_latency_csv = [&] {
+            latency_recorder.WriteCsv();
+            logger.info(
+                "OE latency samples={} written to {}",
+                latency_recorder.SampleCount(),
+                latency_recorder.OutputPath());
+        };
+
         std::unique_ptr<IClientTransport> transport;
         if (options.transport == "grpc") {
             transport = std::make_unique<OeGrpcClientTransport>(
                 options.host,
                 options.port,
-                logger);
+                logger,
+                latency_recorder);
         } else {
             transport = std::make_unique<OeTcpClientTransport>(
                 options.host.c_str(),
                 options.port,
-                logger);
+                logger,
+                latency_recorder);
         }
 
         utils::ConnectionResult replay_result{};
@@ -73,6 +92,7 @@ int main(int argc, char* argv[]) {
         if (replay_result == utils::ConnectionResult::PeerDisconnected) {
             transport->Finish();
             logger.info("Server closed the order-entry connection");
+            write_latency_csv();
             return 0;
         }
 
@@ -84,6 +104,7 @@ int main(int argc, char* argv[]) {
         if (final_result == utils::ConnectionResult::PeerDisconnected) {
             transport->Finish();
             logger.info("Server closed the order-entry connection");
+            write_latency_csv();
             return 0;
         }
 
@@ -91,10 +112,12 @@ int main(int argc, char* argv[]) {
         if (transport->Finish() ==
             utils::ConnectionResult::PeerDisconnected) {
             logger.info("Server closed the order-entry connection");
+            write_latency_csv();
             return 0;
         }
 
         logger.info("Order-entry replay complete");
+        write_latency_csv();
     } catch (const std::exception& error) {
         logger.error("Order-entry client failed: {}", error.what());
         return 1;
