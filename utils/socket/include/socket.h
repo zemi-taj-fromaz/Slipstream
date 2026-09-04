@@ -50,6 +50,20 @@ namespace utils {
         void Bind(std::uint16_t port);
         void Bind(const char* address, std::uint16_t port);
 
+        void SetMulticastTtl(std::uint8_t ttl) requires (type == SockType::Udp);
+        void SetMulticastLoop(bool enabled = true) requires (type == SockType::Udp);
+        void SetMulticastInterface(const char* address) requires (type == SockType::Udp);
+        void JoinMulticastGroup(
+            const char* group,
+            const char* interface_address = "0.0.0.0")
+            requires (type == SockType::Udp);
+        void SendDatagram(
+            std::span<const std::byte> bytes,
+            const char* address,
+            std::uint16_t port)
+            requires (type == SockType::Udp);
+        ssize_t RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp);
+
         void SetTcpNoDelay(bool enabled = true) requires (type == SockType::Tcp);
         void Listen(int backlog = 8) requires (type == SockType::Tcp);
         [[nodiscard]] Socket Accept() requires (type == SockType::Tcp);
@@ -57,7 +71,6 @@ namespace utils {
         ConnectionResult SendAll(std::span<const std::byte> bytes) requires (type == SockType::Tcp);
 
         ssize_t Recv(std::span<std::byte> buffer) requires (type == SockType::Tcp);
-        ssize_t RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp);
 
         void Shutdown(int how);
 
@@ -166,6 +179,145 @@ namespace utils {
                 errno,
                 std::generic_category(),
                 "bind() failed");
+        }
+    }
+
+    template <SockType type>
+    void Socket<type>::SetMulticastTtl(std::uint8_t ttl)
+        requires (type == SockType::Udp) {
+        SetSockOption(IPPROTO_IP, IP_MULTICAST_TTL, static_cast<int>(ttl));
+    }
+
+    template <SockType type>
+    void Socket<type>::SetMulticastLoop(bool enabled)
+        requires (type == SockType::Udp) {
+        SetSockOption(IPPROTO_IP, IP_MULTICAST_LOOP, enabled ? 1 : 0);
+    }
+
+    template <SockType type>
+    void Socket<type>::SetMulticastInterface(const char* address)
+        requires (type == SockType::Udp) {
+        in_addr interface_address{};
+        const int conversion_result =
+            ::inet_pton(AF_INET, address, &interface_address);
+        if (conversion_result == 0) {
+            throw std::invalid_argument("invalid IPv4 multicast interface address");
+        }
+        if (conversion_result == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "inet_pton() failed for multicast interface address");
+        }
+
+        const int result = ::setsockopt(
+            fd,
+            IPPROTO_IP,
+            IP_MULTICAST_IF,
+            &interface_address,
+            sizeof(interface_address));
+        if (result == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "setsockopt(IP_MULTICAST_IF) failed");
+        }
+    }
+
+    template <SockType type>
+    void Socket<type>::JoinMulticastGroup(
+        const char* group,
+        const char* interface_address)
+        requires (type == SockType::Udp) {
+        ip_mreq membership{};
+
+        const int group_conversion =
+            ::inet_pton(AF_INET, group, &membership.imr_multiaddr);
+        if (group_conversion == 0) {
+            throw std::invalid_argument("invalid IPv4 multicast group address");
+        }
+        if (group_conversion == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "inet_pton() failed for multicast group address");
+        }
+        if (!IN_MULTICAST(ntohl(membership.imr_multiaddr.s_addr))) {
+            throw std::invalid_argument("address is not an IPv4 multicast group");
+        }
+
+        const int interface_conversion =
+            ::inet_pton(AF_INET, interface_address, &membership.imr_interface);
+        if (interface_conversion == 0) {
+            throw std::invalid_argument("invalid IPv4 multicast interface address");
+        }
+        if (interface_conversion == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "inet_pton() failed for multicast interface address");
+        }
+
+        const int result = ::setsockopt(
+            fd,
+            IPPROTO_IP,
+            IP_ADD_MEMBERSHIP,
+            &membership,
+            sizeof(membership));
+        if (result == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "setsockopt(IP_ADD_MEMBERSHIP) failed");
+        }
+    }
+
+    template <SockType type>
+    void Socket<type>::SendDatagram(
+        std::span<const std::byte> bytes,
+        const char* address,
+        std::uint16_t port)
+        requires (type == SockType::Udp) {
+        sockaddr_in destination{};
+        destination.sin_family = AF_INET;
+        destination.sin_port = htons(port);
+
+        const int conversion_result =
+            ::inet_pton(AF_INET, address, &destination.sin_addr);
+        if (conversion_result == 0) {
+            throw std::invalid_argument("invalid IPv4 destination address");
+        }
+        if (conversion_result == -1) {
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "inet_pton() failed for destination address");
+        }
+
+        while (true) {
+            const ssize_t sent = ::sendto(
+                fd,
+                bytes.data(),
+                bytes.size(),
+                MSG_DONTWAIT | MSG_NOSIGNAL,
+                reinterpret_cast<const sockaddr*>(&destination),
+                sizeof(destination));
+
+            if (sent >= 0) {
+                if (static_cast<std::size_t>(sent) != bytes.size()) {
+                    throw std::runtime_error("sendto() sent a partial datagram");
+                }
+                return;
+            }
+
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "sendto() failed");
         }
     }
 
