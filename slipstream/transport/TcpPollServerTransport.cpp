@@ -106,6 +106,8 @@ void TcpPollServerTransport::Run() {
 
     auto md_client = md_listener.Accept();
     auto oe_client = oe_listener.Accept();
+    md_client.SetKeepAlive();
+    oe_client.SetKeepAlive();
     oe_client.SetTcpNoDelay();
     oe_client.SetSendBufferSize(send_buffer_size);
 

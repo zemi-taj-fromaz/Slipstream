@@ -9,6 +9,7 @@ MdTcpClientTransport::MdTcpClientTransport(
     const char* host,
     std::uint16_t port) {
     constexpr int send_buffer_size = 1024 * 1024;
+    socket_.SetKeepAlive();
     socket_.SetTcpNoDelay();
     socket_.SetSendBufferSize(send_buffer_size);
     socket_.Connect(host, port);

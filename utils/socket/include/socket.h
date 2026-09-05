@@ -8,7 +8,6 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstddef>
-#include <cstdint>
 #include <span>
 #include <stdexcept>
 #include <system_error>
@@ -64,6 +63,7 @@ namespace utils {
             requires (type == SockType::Udp);
         ssize_t RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp);
 
+        void SetKeepAlive(bool enabled = true) requires (type == SockType::Tcp);
         void SetTcpNoDelay(bool enabled = true) requires (type == SockType::Tcp);
         void Listen(int backlog = 8) requires (type == SockType::Tcp);
         [[nodiscard]] Socket Accept() requires (type == SockType::Tcp);
@@ -319,6 +319,12 @@ namespace utils {
                 std::generic_category(),
                 "sendto() failed");
         }
+    }
+
+    template <SockType type>
+    void Socket<type>::SetKeepAlive(bool enabled)
+        requires (type == SockType::Tcp) {
+        SetSockOption(SOL_SOCKET, SO_KEEPALIVE, enabled ? 1 : 0);
     }
 
     template <SockType type>

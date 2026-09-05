@@ -114,6 +114,7 @@ void UdpMulticastServerTransport::Run() {
     session_control_listener.Bind("127.0.0.1", 9099);
 
     auto oe_client = oe_listener.Accept();
+    oe_client.SetKeepAlive();
     oe_client.SetTcpNoDelay();
     oe_client.SetSendBufferSize(send_buffer_size);
 

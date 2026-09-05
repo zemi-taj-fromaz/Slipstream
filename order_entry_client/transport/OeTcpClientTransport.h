@@ -22,18 +22,15 @@ public:
         OeLatencyRecorder& latency_recorder);
 
     utils::ConnectionResult Send(const MarketEvent& event) override;
-    utils::ConnectionResult ProcessInboundUntil(
-        std::chrono::steady_clock::time_point deadline) override;
+    utils::ConnectionResult ProcessInboundUntil(std::chrono::steady_clock::time_point deadline) override;
 
 private:
     [[nodiscard]] static std::string Symbol(const char (&symbol)[12]);
 
     utils::ConnectionResult ReceiveAvailable();
-    void HandleMessage(
-        const slipstream::codec::OrderEntryClientMessage& message);
+    void HandleMessage(const slipstream::codec::OrderEntryClientMessage& message);
 
-    slipstream::codec::SessionState sessionState{
-        slipstream::codec::SessionState::open};
+    slipstream::codec::SessionState sessionState{slipstream::codec::SessionState::open};
     utils::TcpSocket socket_;
     pollfd poll_descriptor_{};
     slipstream::codec::ClientSideDecoder decoder_;
