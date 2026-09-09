@@ -384,8 +384,7 @@ namespace utils {
     }
 
     template <SockType type>
-    ConnectionResult Socket<type>::SendAll(std::span<const std::byte> bytes)
-        requires (type == SockType::Tcp) {
+    ConnectionResult Socket<type>::SendAll(std::span<const std::byte> bytes) requires (type == SockType::Tcp) {
         std::size_t offset{};
 
         while (offset < bytes.size()) {

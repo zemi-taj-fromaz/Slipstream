@@ -201,19 +201,14 @@ void TcpPollServerTransport::recvMarketEvent(
                 static_cast<std::size_t>(recvd)};
 
             std::vector<MarketEvent> recv_messages;
-            const auto result = decoder.Decode(
-                received_bytes,
-                recv_messages);
+            const auto result = decoder.Decode(received_bytes,recv_messages);
 
             for (auto& recv_message : recv_messages) {
-                if (std::strcmp(
-                        recv_message.symbol,
-                        config_.symbol.c_str()) != 0) {
+                if (std::strcmp(recv_message.symbol,config_.symbol.c_str()) != 0) {
                     continue;
                 }
 
-                if (std::holds_alternative<Trade>(
-                        recv_message.payload)) {
+                if (std::holds_alternative<Trade>(recv_message.payload)) {
                     markOeActivity();
                 }
 
