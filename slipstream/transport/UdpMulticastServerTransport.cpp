@@ -67,12 +67,8 @@ void UdpMulticastServerTransport::Run() {
     constexpr int receive_buffer_size = 1024 * 1024;
     constexpr int send_buffer_size = 1024 * 1024;
 
-    IMsgController quiet_controller;
-    IMsgController* md_controller = &quiet_controller;
-    IMsgController* oe_controller = &quiet_controller;
-
-    std::unique_ptr<CanonicalFileMsgController> received_quotes;
-    std::unique_ptr<CanonicalFileMsgController> received_trades;
+    std::unique_ptr<IEventObserver> md_observer;
+    std::unique_ptr<IEventObserver> oe_observer;
 
     if (utils::ReplayVerificationEnabled()) {
         const std::string received_quotes_path =
@@ -82,12 +78,10 @@ void UdpMulticastServerTransport::Run() {
             std::string{SLIPSTREAM_VERIFICATION_DIR} +
             "/received_trades.csv";
 
-        received_quotes = std::make_unique<CanonicalFileMsgController>(
+        md_observer = std::make_unique<CanonicalFileEventObserver>(
             received_quotes_path.c_str());
-        received_trades = std::make_unique<CanonicalFileMsgController>(
+        oe_observer = std::make_unique<CanonicalFileEventObserver>(
             received_trades_path.c_str());
-        md_controller = received_quotes.get();
-        oe_controller = received_trades.get();
     }
 
     md_feed_a.SetReuseAddress();
@@ -175,13 +169,13 @@ void UdpMulticastServerTransport::Run() {
             drainEgress();
         }
         if (poll_fds[md_a_index].revents & POLLIN) {
-            recvMulticastMarketData(md_feed_a, *md_controller);
+            recvMulticastMarketData(md_feed_a, md_observer.get());
         }
         if (poll_fds[md_b_index].revents & POLLIN) {
-            recvMulticastMarketData(md_feed_b, *md_controller);
+            recvMulticastMarketData(md_feed_b, md_observer.get());
         }
         if (poll_fds[oe_index].revents & POLLIN) {
-            recvOrderEntry(oe_client, *oe_controller);
+            recvOrderEntry(oe_client, oe_observer.get());
         }
         if (poll_fds[session_control_index].revents & POLLIN) {
             recvSessionControl(session_control_listener);
@@ -201,7 +195,7 @@ void UdpMulticastServerTransport::Stop() {
 
 void UdpMulticastServerTransport::recvMulticastMarketData(
     utils::UdpSocket& feed,
-    IMsgController& controller) {
+    IEventObserver* observer) {
     std::array<
         std::byte,
         codec::max_multicast_datagram_size + 1> recv_buffer{};
@@ -241,7 +235,7 @@ void UdpMulticastServerTransport::recvMulticastMarketData(
             processMulticastMarketData(
                 datagram,
                 MonotonicNowNs(),
-                controller);
+                observer);
             ++expected_sequence;
             return;
         }
@@ -267,7 +261,7 @@ void UdpMulticastServerTransport::recvMulticastMarketData(
 void UdpMulticastServerTransport::processMulticastMarketData(
     const codec::MulticastMarketDataDatagram& datagram,
     std::uint64_t received_at_ns,
-    IMsgController& controller) {
+    IEventObserver* observer) {
     if (!std::holds_alternative<Quote>(datagram.event.payload)) {
         throw std::runtime_error(
             "multicast market-data feed received a non-quote event");
@@ -295,12 +289,14 @@ void UdpMulticastServerTransport::processMulticastMarketData(
         ingress_generation->notify_one();
     }
 
-    controller.Sink(datagram.event);
+    if (observer != nullptr) {
+        observer->OnEvent(datagram.event);
+    }
 }
 
 void UdpMulticastServerTransport::recvOrderEntry(
     utils::TcpSocket& client,
-    IMsgController& controller) {
+    IEventObserver* observer) {
     std::array<std::byte, 4096> recv_buffer{};
 
     while (true) {
@@ -344,7 +340,9 @@ void UdpMulticastServerTransport::recvOrderEntry(
                     ingress_generation->notify_one();
                 }
 
-                controller.Sink(recv_message);
+                if (observer != nullptr) {
+                    observer->OnEvent(recv_message);
+                }
             }
 
             if (result.status == codec::DecodeStatus::error) {

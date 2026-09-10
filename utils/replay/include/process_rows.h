@@ -22,7 +22,7 @@ utils::ConnectionResult ProcessRowsByTimestamp(
     const std::vector<MarketEvent>& rows,
     IClientTransport& transport,
     std::uint64_t start_at_ns,
-    IMsgController* observer = nullptr) {
+    IEventObserver* observer = nullptr) {
     if (rows.empty()) {
         return utils::ConnectionResult::Complete;
     }
@@ -73,7 +73,7 @@ utils::ConnectionResult ProcessRowsByTimestamp(
         }
 
         if (observer != nullptr) {
-            observer->Sink(row);
+            observer->OnEvent(row);
         }
 
         if (transport.Send(row) ==

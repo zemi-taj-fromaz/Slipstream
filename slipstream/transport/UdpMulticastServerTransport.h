@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <deque>
 
-class IMsgController;
+class IEventObserver;
 
 namespace slipstream {
 
@@ -53,14 +53,14 @@ private:
     void queueSessionControl(codec::SessionState state);
     void recvMulticastMarketData(
         utils::UdpSocket& feed,
-        IMsgController& controller);
+        IEventObserver* observer);
     void processMulticastMarketData(
         const codec::MulticastMarketDataDatagram& datagram,
         std::uint64_t received_at_ns,
-        IMsgController& controller);
+        IEventObserver* observer);
     void recvOrderEntry(
         utils::TcpSocket& client,
-        IMsgController& controller);
+        IEventObserver* observer);
     void recvSessionControl(utils::UdpSocket& client);
 
     utils::UdpSocket md_feed_a{};

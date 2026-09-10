@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
             const std::string expected_path =
                 std::string{SLIPSTREAM_VERIFICATION_DIR} +
                 "/expected_trades.csv";
-            CanonicalFileMsgController expected_events{expected_path.c_str()};
+            CanonicalFileEventObserver expected_events{expected_path.c_str()};
             replay_result = ProcessRowsByTimestamp<EventType::Trade>(
                 events,
                 *transport,

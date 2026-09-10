@@ -13,7 +13,7 @@
 #include <cstdint>
 #include <deque>
 
-class IMsgController;
+class IEventObserver;
 
 namespace slipstream {
 
@@ -54,7 +54,7 @@ private:
     void recvMarketEvent(
         utils::Socket<utils::SockType::Tcp>& client,
         codec::MarketEventDecoder& decoder,
-        IMsgController& controller);
+        IEventObserver* observer);
     void recvSessionControl(
         utils::Socket<utils::SockType::Udp>& client);
 

@@ -67,12 +67,8 @@ void TcpPollServerTransport::Run() {
     constexpr int receive_buffer_size = 1024 * 1024;
     constexpr int send_buffer_size = 1024 * 1024;
 
-    IMsgController quiet_controller;
-    IMsgController* md_controller = &quiet_controller;
-    IMsgController* oe_controller = &quiet_controller;
-
-    std::unique_ptr<CanonicalFileMsgController> received_quotes;
-    std::unique_ptr<CanonicalFileMsgController> received_trades;
+    std::unique_ptr<IEventObserver> md_observer;
+    std::unique_ptr<IEventObserver> oe_observer;
 
     if (utils::ReplayVerificationEnabled()) {
         const std::string received_quotes_path =
@@ -82,12 +78,10 @@ void TcpPollServerTransport::Run() {
             std::string{SLIPSTREAM_VERIFICATION_DIR} +
             "/received_trades.csv";
 
-        received_quotes = std::make_unique<CanonicalFileMsgController>(
+        md_observer = std::make_unique<CanonicalFileEventObserver>(
             received_quotes_path.c_str());
-        received_trades = std::make_unique<CanonicalFileMsgController>(
+        oe_observer = std::make_unique<CanonicalFileEventObserver>(
             received_trades_path.c_str());
-        md_controller = received_quotes.get();
-        oe_controller = received_trades.get();
     }
 
     md_listener.SetReuseAddress();
@@ -165,10 +159,10 @@ void TcpPollServerTransport::Run() {
             drainEgress();
         }
         if (poll_fds[md_index].revents & POLLIN) {
-            recvMarketEvent(md_client, md_decoder, *md_controller);
+            recvMarketEvent(md_client, md_decoder, md_observer.get());
         }
         if (poll_fds[oe_index].revents & POLLIN) {
-            recvMarketEvent(oe_client, oe_decoder, *oe_controller);
+            recvMarketEvent(oe_client, oe_decoder, oe_observer.get());
         }
         if (poll_fds[session_control_index].revents & POLLIN) {
             recvSessionControl(session_control_listener);
@@ -189,7 +183,7 @@ void TcpPollServerTransport::Stop() {
 void TcpPollServerTransport::recvMarketEvent(
     utils::Socket<utils::SockType::Tcp>& client,
     codec::MarketEventDecoder& decoder,
-    IMsgController& controller) {
+    IEventObserver* observer) {
     std::array<std::byte, 4096> recv_buffer;
 
     while (true) {
@@ -228,7 +222,9 @@ void TcpPollServerTransport::recvMarketEvent(
                     ingress_generation->notify_one();
                 }
 
-                controller.Sink(recv_message);
+                if (observer != nullptr) {
+                    observer->OnEvent(recv_message);
+                }
             }
 
             if (result.status == codec::DecodeStatus::error) {

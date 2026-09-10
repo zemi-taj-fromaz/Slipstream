@@ -40,60 +40,15 @@ MarketEvent TradeEvent() {
     return event;
 }
 
-TEST(ConsoleMsgController, PrintsQuote) {
-    ConsoleMsgController controller;
-
-    testing::internal::CaptureStdout();
-    controller.Sink(QuoteEvent());
-    const std::string output = testing::internal::GetCapturedStdout();
-
-    EXPECT_EQ(
-        output,
-        "ts=123000000 symbol=SYNTH1 type=Q "
-        "bid=1012300x100 ask=1012500x200\n");
-}
-
-TEST(ConsoleMsgController, PrintsTrade) {
-    ConsoleMsgController controller;
-
-    testing::internal::CaptureStdout();
-    controller.Sink(TradeEvent());
-    const std::string output = testing::internal::GetCapturedStdout();
-
-    EXPECT_EQ(
-        output,
-        "ts=456000000 symbol=SYNTH1 type=T price=1012400 qty=75\n");
-}
-
-class CountingMsgController final : public IMsgController {
-public:
-    void Sink(const MarketEvent&) override {
-        ++count;
-    }
-
-    int count{0};
-};
-
-TEST(FanoutMsgController, ForwardsToBothControllers) {
-    CountingMsgController first;
-    CountingMsgController second;
-    FanoutMsgController fanout{first, second};
-
-    fanout.Sink(QuoteEvent());
-
-    EXPECT_EQ(first.count, 1);
-    EXPECT_EQ(second.count, 1);
-}
-
-TEST(CanonicalFileMsgController, WritesDeterministicProtocolFields) {
+TEST(CanonicalFileEventObserver, WritesDeterministicProtocolFields) {
     const std::filesystem::path output_path =
         std::filesystem::temp_directory_path() /
         "slipstream_canonical_message_processor_test.csv";
 
     {
-        CanonicalFileMsgController controller{output_path.c_str()};
-        controller.Sink(QuoteEvent());
-        controller.Sink(TradeEvent());
+        CanonicalFileEventObserver observer{output_path.c_str()};
+        observer.OnEvent(QuoteEvent());
+        observer.OnEvent(TradeEvent());
     }
 
     std::ifstream input{output_path};
