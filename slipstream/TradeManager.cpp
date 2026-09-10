@@ -29,8 +29,8 @@ TradeManager::TradeManager(const SlipstreamConfig& slipstream) : vwap_window(sli
 
 }
 
-TradeManagerResult TradeManager::Push(MarketEvent& event) {
-    if (auto* quote = std::get_if<Quote>(&event.payload)) {
+TradeManagerResult TradeManager::Push(const MarketEvent& event) {
+    if (const auto* quote = std::get_if<Quote>(&event.payload)) {
         if (!book) {
             book.emplace(L1Book{
                 .bid_price = quote->bid_price,
@@ -105,7 +105,7 @@ TradeManagerResult TradeManager::Push(MarketEvent& event) {
 
         return result;
     }
-    else if (auto* trade = std::get_if<Trade>(&event.payload)) {
+    else if (const auto* trade = std::get_if<Trade>(&event.payload)) {
         const TradeDecision decision = vwap_window.push(TradePrint{
                 .pq =
                     static_cast<__int128_t>(trade->price) * trade->qty,

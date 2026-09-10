@@ -37,7 +37,8 @@ public:
     void NotifyOutboundReady() override;
 
     [[nodiscard]]
-    TickToOrderStatistics GetTickToOrderStatistics() const override;
+    TickToOrderStatistics
+    GetTickToOrderStatistics() const noexcept override;
 
     [[nodiscard]]
     const TickToOrderHistogram&
@@ -47,7 +48,7 @@ private:
     void resetWakeNotif();
     void drainEgress();
     void flushSendQueue(utils::TcpSocket& oe_client);
-    void markOeActivity();
+    void markOeActivity() noexcept;
     void checkHeartbeat();
     void queueHeartbeat();
     void queueSessionControl(codec::SessionState state);

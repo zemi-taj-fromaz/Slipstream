@@ -65,10 +65,10 @@ public:
 
 private:
     [[nodiscard]] TradeDecision checkConstraints(TradePrint& trade_print);
-    void resolveSide(TradePrint& trade_print) const;
+    void resolveSide(TradePrint& trade_print) const noexcept;
     void evictExpired(std::uint64_t now_ns);
     void insert(const TradePrint& trade_print);
-    void recomputeMetrics();
+    void recomputeMetrics() noexcept;
 
     double participation_cap;
     std::uint64_t vwap_window_ns;

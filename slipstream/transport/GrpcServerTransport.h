@@ -39,7 +39,8 @@ public:
     void NotifyOutboundReady() override;
 
     [[nodiscard]]
-    TickToOrderStatistics GetTickToOrderStatistics() const override;
+    TickToOrderStatistics
+    GetTickToOrderStatistics() const noexcept override;
 
     [[nodiscard]]
     const TickToOrderHistogram&
@@ -63,13 +64,13 @@ private:
     void drainSessionControl();
     void processSessionCommand(std::string_view command);
     void queueSessionControl(codec::SessionState state);
-    void markOeActivity();
+    void markOeActivity() noexcept;
     void checkHeartbeat();
     void queueHeartbeat();
     void recordTickToOrder(
         std::uint64_t trigger_received_at_ns,
         std::uint64_t send_started_at_ns,
-        bool measure_tick_to_order);
+        bool measure_tick_to_order) noexcept;
 
     const SlipstreamConfig& config_;
     MarketEventQueue& ingress_;

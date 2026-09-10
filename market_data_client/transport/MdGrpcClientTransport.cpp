@@ -15,7 +15,7 @@ std::string Address(const std::string& host, const std::uint16_t port) {
 MdGrpcClientTransport::MdGrpcClientTransport(
     const std::string& host,
     const std::uint16_t port) {
-    auto channel = grpc::CreateChannel(
+    const auto channel = grpc::CreateChannel(
         Address(host, port),
         grpc::InsecureChannelCredentials());
     if (!channel->WaitForConnected(

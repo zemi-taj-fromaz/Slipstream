@@ -15,7 +15,7 @@ public:
 
     [[nodiscard]]
     virtual TickToOrderStatistics
-    GetTickToOrderStatistics() const = 0;
+    GetTickToOrderStatistics() const noexcept = 0;
 
     [[nodiscard]]
     virtual const TickToOrderHistogram&

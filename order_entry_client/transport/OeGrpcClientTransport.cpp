@@ -14,7 +14,7 @@ std::string Address(const std::string& host, const std::uint16_t port) {
 }
 
 slipstream::grpc_api::Trade::Aggressor ToGrpcAggressor(
-    const char aggressor) {
+    const char aggressor) noexcept {
     if (aggressor == 'B') {
         return slipstream::grpc_api::Trade::AGGRESSOR_BUY;
     }
@@ -33,7 +33,7 @@ OeGrpcClientTransport::OeGrpcClientTransport(
     OeLatencyRecorder& latency_recorder)
     : logger_{logger},
       latency_recorder_{latency_recorder} {
-    auto channel = grpc::CreateChannel(
+    const auto channel = grpc::CreateChannel(
         Address(host, port),
         grpc::InsecureChannelCredentials());
     if (!channel->WaitForConnected(

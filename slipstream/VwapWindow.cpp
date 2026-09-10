@@ -198,7 +198,7 @@ TradeDecision VwapWindow::checkConstraints(TradePrint& trade_print) {
     };
 }
 
-void VwapWindow::resolveSide(TradePrint& trade_print) const {
+void VwapWindow::resolveSide(TradePrint& trade_print) const noexcept {
     if (trade_print.side != TradeSide::Unknown) {
         return;
     }
@@ -254,7 +254,7 @@ void VwapWindow::insert(const TradePrint& trade_print) {
     }
 }
 
-void VwapWindow::recomputeMetrics() {
+void VwapWindow::recomputeMetrics() noexcept {
     if (sum_market_qty == 0) {
         rolling_vwap = 0;
         return;

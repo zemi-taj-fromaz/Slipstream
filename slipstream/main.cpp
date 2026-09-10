@@ -171,8 +171,8 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
-    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+    const auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    const auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
         "slipstream_server.log",
         true);
     const std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};

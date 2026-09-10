@@ -24,14 +24,14 @@ std::string Address(const std::string& host, const std::uint16_t port) {
     return host + ':' + std::to_string(port);
 }
 
-std::uint64_t MonotonicNowNs() {
+std::uint64_t MonotonicNowNs() noexcept {
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count());
 }
 
-std::uint64_t UnixNowNs() {
+std::uint64_t UnixNowNs() noexcept {
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::system_clock::now().time_since_epoch())
@@ -567,7 +567,7 @@ void GrpcServerTransport::NotifyOutboundReady() {
 }
 
 TickToOrderStatistics
-GrpcServerTransport::GetTickToOrderStatistics() const {
+GrpcServerTransport::GetTickToOrderStatistics() const noexcept {
     return tick_to_order_histogram_.GetStatistics();
 }
 
@@ -685,7 +685,7 @@ void GrpcServerTransport::queueSessionControl(const codec::SessionState state) {
     });
 }
 
-void GrpcServerTransport::markOeActivity() {
+void GrpcServerTransport::markOeActivity() noexcept {
     last_oe_activity_ = std::chrono::steady_clock::now();
     next_heartbeat_ = last_oe_activity_ + heartbeat_interval;
 }
@@ -725,7 +725,7 @@ void GrpcServerTransport::queueHeartbeat() {
 void GrpcServerTransport::recordTickToOrder(
     const std::uint64_t trigger_received_at_ns,
     const std::uint64_t send_started_at_ns,
-    const bool measure_tick_to_order) {
+    const bool measure_tick_to_order) noexcept {
     if (!measure_tick_to_order) {
         return;
     }

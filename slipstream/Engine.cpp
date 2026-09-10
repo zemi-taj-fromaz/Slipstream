@@ -79,7 +79,7 @@ void Engine::Run() {
             }
         }
 
-        MarketEvent& event = inbound.message;
+        const MarketEvent& event = inbound.message;
 
         const TradeManagerResult manager_result = trade_manager.Push(event);
 

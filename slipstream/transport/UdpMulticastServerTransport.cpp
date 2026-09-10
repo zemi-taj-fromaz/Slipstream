@@ -25,7 +25,7 @@ namespace slipstream {
 
 namespace {
 
-std::uint64_t MonotonicNowNs() {
+std::uint64_t MonotonicNowNs() noexcept {
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
@@ -503,7 +503,7 @@ void UdpMulticastServerTransport::flushSendQueue(
 }
 
 TickToOrderStatistics
-UdpMulticastServerTransport::GetTickToOrderStatistics() const {
+UdpMulticastServerTransport::GetTickToOrderStatistics() const noexcept {
     return tick_to_order_histogram.GetStatistics();
 }
 
@@ -512,7 +512,7 @@ UdpMulticastServerTransport::GetTickToOrderHistogram() const noexcept {
     return tick_to_order_histogram;
 }
 
-void UdpMulticastServerTransport::markOeActivity() {
+void UdpMulticastServerTransport::markOeActivity() noexcept {
     last_oe_activity = std::chrono::steady_clock::now();
     next_heartbeat = last_oe_activity + heartbeat_interval;
 }

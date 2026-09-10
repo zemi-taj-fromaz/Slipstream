@@ -63,7 +63,8 @@ namespace utils {
             requires (type == SockType::Udp);
         void SendDatagram(std::span<const std::byte> bytes)
             requires (type == SockType::Udp);
-        ssize_t RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp);
+        ssize_t RecvDatagram(std::span<std::byte> buffer) noexcept
+            requires (type == SockType::Udp);
 
         void SetKeepAlive(bool enabled = true) requires (type == SockType::Tcp);
         void SetTcpNoDelay(bool enabled = true) requires (type == SockType::Tcp);
@@ -72,7 +73,8 @@ namespace utils {
         void Connect(const char* address, std::uint16_t port);
         ConnectionResult SendAll(std::span<const std::byte> bytes) requires (type == SockType::Tcp);
 
-        ssize_t Recv(std::span<std::byte> buffer) requires (type == SockType::Tcp);
+        ssize_t Recv(std::span<std::byte> buffer) noexcept
+            requires (type == SockType::Tcp);
 
         void Shutdown(int how);
 
@@ -404,12 +406,14 @@ namespace utils {
     }
 
     template <SockType type>
-    ssize_t Socket<type>::Recv(std::span<std::byte> buffer) requires (type == SockType::Tcp) {
+    ssize_t Socket<type>::Recv(std::span<std::byte> buffer) noexcept
+        requires (type == SockType::Tcp) {
         return ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
     }
 
     template <SockType type>
-    ssize_t Socket<type>::RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp) {
+    ssize_t Socket<type>::RecvDatagram(std::span<std::byte> buffer) noexcept
+        requires (type == SockType::Udp) {
         return ::recv(fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
     }
 

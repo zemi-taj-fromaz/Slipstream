@@ -20,8 +20,8 @@
 int main(int argc, char* argv[]) {
     constexpr auto csv_path = SLIPSTREAM_CSV_PATH;
 
-    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+    const auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    const auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
         "market_data_client.log",
         true);
     const std::vector<spdlog::sink_ptr> sinks{console_sink, file_sink};
