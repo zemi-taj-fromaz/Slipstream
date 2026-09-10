@@ -13,13 +13,31 @@ namespace slipstream::codec {
 namespace {
 
 template <typename Integer>
-Integer readUnsignedLittleEndian(std::span<const std::byte> bytes) {
-    Integer value{0};
-    for (std::size_t index = 0; index < sizeof(Integer); ++index) {
-        value |= static_cast<Integer>(std::to_integer<unsigned int>(bytes[index]))
-                 << (index * 8);
+Integer convertLittleEndian(Integer value) {
+    static_assert(
+        std::endian::native == std::endian::little ||
+        std::endian::native == std::endian::big);
+
+    if constexpr (std::endian::native == std::endian::big) {
+        return std::byteswap(value);
     }
+
     return value;
+}
+
+template <typename Integer>
+Integer readUnsignedLittleEndian(std::span<const std::byte> bytes) {
+    Integer value{};
+    std::memcpy(&value, bytes.data(), sizeof(value));
+    return convertLittleEndian(value);
+}
+
+template <typename Integer>
+void writeUnsignedLittleEndian(
+    std::span<std::byte> bytes,
+    Integer value) {
+    value = convertLittleEndian(value);
+    std::memcpy(bytes.data(), &value, sizeof(value));
 }
 
 std::uint16_t readUint16LittleEndian(std::span<const std::byte> bytes) {
@@ -39,26 +57,15 @@ std::int64_t readInt64LittleEndian(std::span<const std::byte> bytes) {
 }
 
 void writeUint16LittleEndian(std::span<std::byte> bytes, uint16_t value) {
-    bytes[0] = static_cast<std::byte>(value & 0xFF);
-    bytes[1] = static_cast<std::byte>((value >> 8) & 0xFF);
+    writeUnsignedLittleEndian(bytes, value);
 }
 
 void writeUint32LittleEndian(std::span<std::byte> bytes, uint32_t value) {
-    bytes[0] = static_cast<std::byte>(value & 0xFF);
-    bytes[1] = static_cast<std::byte>((value >> 8) & 0xFF);
-    bytes[2] = static_cast<std::byte>((value >> 16) & 0xFF);
-    bytes[3] = static_cast<std::byte>((value >> 24) & 0xFF);
+    writeUnsignedLittleEndian(bytes, value);
 }
 
 void writeUint64LittleEndian(std::span<std::byte> bytes, uint64_t value) {
-    bytes[0] = static_cast<std::byte>(value & 0xFF);
-    bytes[1] = static_cast<std::byte>((value >> 8) & 0xFF);
-    bytes[2] = static_cast<std::byte>((value >> 16) & 0xFF);
-    bytes[3] = static_cast<std::byte>((value >> 24) & 0xFF);
-    bytes[4] = static_cast<std::byte>((value >> 32) & 0xFF);
-    bytes[5] = static_cast<std::byte>((value >> 40) & 0xFF);
-    bytes[6] = static_cast<std::byte>((value >> 48) & 0xFF);
-    bytes[7] = static_cast<std::byte>((value >> 56) & 0xFF);
+    writeUnsignedLittleEndian(bytes, value);
 }
 
 void writeInt64LittleEndian(std::span<std::byte> bytes, int64_t value) {
