@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <span>
 #include <stdexcept>
-#include <utility>
 #include <variant>
 
 MdUdpMulticastClientTransport::MdUdpMulticastClientTransport(
@@ -14,11 +13,7 @@ MdUdpMulticastClientTransport::MdUdpMulticastClientTransport(
     std::uint16_t feed_a_port,
     std::string feed_b_group,
     std::uint16_t feed_b_port,
-    std::string multicast_interface)
-    : feed_a_group_{std::move(feed_a_group)},
-      feed_a_port_{feed_a_port},
-      feed_b_group_{std::move(feed_b_group)},
-      feed_b_port_{feed_b_port} {
+    std::string multicast_interface) {
     constexpr int send_buffer_size = 1024 * 1024;
     constexpr std::uint8_t multicast_ttl = 1;
 
@@ -26,11 +21,13 @@ MdUdpMulticastClientTransport::MdUdpMulticastClientTransport(
     feed_a_.SetMulticastTtl(multicast_ttl);
     feed_a_.SetMulticastLoop();
     feed_a_.SetMulticastInterface(multicast_interface.c_str());
+    feed_a_.Connect(feed_a_group.c_str(), feed_a_port);
 
     feed_b_.SetSendBufferSize(send_buffer_size);
     feed_b_.SetMulticastTtl(multicast_ttl);
     feed_b_.SetMulticastLoop();
     feed_b_.SetMulticastInterface(multicast_interface.c_str());
+    feed_b_.Connect(feed_b_group.c_str(), feed_b_port);
 }
 
 utils::ConnectionResult MdUdpMulticastClientTransport::Send(
@@ -52,14 +49,8 @@ utils::ConnectionResult MdUdpMulticastClientTransport::Send(
         buffer.data(),
         encoded_size};
 
-    feed_a_.SendDatagram(
-        datagram,
-        feed_a_group_.c_str(),
-        feed_a_port_);
-    feed_b_.SendDatagram(
-        datagram,
-        feed_b_group_.c_str(),
-        feed_b_port_);
+    feed_a_.SendDatagram(datagram);
+    feed_b_.SendDatagram(datagram);
 
     ++sequence_;
     return utils::ConnectionResult::Complete;

@@ -19,10 +19,6 @@ public:
     utils::ConnectionResult Send(const MarketEvent& event) override;
 
 private:
-    std::string feed_a_group_;
-    std::uint16_t feed_a_port_{};
-    std::string feed_b_group_;
-    std::uint16_t feed_b_port_{};
     std::uint64_t sequence_{1};
     utils::UdpSocket feed_a_;
     utils::UdpSocket feed_b_;

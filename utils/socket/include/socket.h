@@ -61,13 +61,15 @@ namespace utils {
             const char* address,
             std::uint16_t port)
             requires (type == SockType::Udp);
+        void SendDatagram(std::span<const std::byte> bytes)
+            requires (type == SockType::Udp);
         ssize_t RecvDatagram(std::span<std::byte> buffer) requires (type == SockType::Udp);
 
         void SetKeepAlive(bool enabled = true) requires (type == SockType::Tcp);
         void SetTcpNoDelay(bool enabled = true) requires (type == SockType::Tcp);
         void Listen(int backlog = 8) requires (type == SockType::Tcp);
         [[nodiscard]] Socket Accept() requires (type == SockType::Tcp);
-        void Connect(const char* address, std::uint16_t port) requires (type == SockType::Tcp);
+        void Connect(const char* address, std::uint16_t port);
         ConnectionResult SendAll(std::span<const std::byte> bytes) requires (type == SockType::Tcp);
 
         ssize_t Recv(std::span<std::byte> buffer) requires (type == SockType::Tcp);
@@ -322,6 +324,34 @@ namespace utils {
     }
 
     template <SockType type>
+    void Socket<type>::SendDatagram(std::span<const std::byte> bytes)
+        requires (type == SockType::Udp) {
+        while (true) {
+            const ssize_t sent = ::send(
+                fd,
+                bytes.data(),
+                bytes.size(),
+                MSG_DONTWAIT | MSG_NOSIGNAL);
+
+            if (sent >= 0) {
+                if (static_cast<std::size_t>(sent) != bytes.size()) {
+                    throw std::runtime_error("send() sent a partial datagram");
+                }
+                return;
+            }
+
+            if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+
+            throw std::system_error(
+                errno,
+                std::generic_category(),
+                "send() failed");
+        }
+    }
+
+    template <SockType type>
     void Socket<type>::SetKeepAlive(bool enabled)
         requires (type == SockType::Tcp) {
         SetSockOption(SOL_SOCKET, SO_KEEPALIVE, enabled ? 1 : 0);
@@ -351,7 +381,7 @@ namespace utils {
     }
 
     template <SockType type>
-    void Socket<type>::Connect(const char* address, std::uint16_t port) requires (type == SockType::Tcp) {
+    void Socket<type>::Connect(const char* address, std::uint16_t port) {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
