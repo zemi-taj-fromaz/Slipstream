@@ -1,5 +1,6 @@
 #include "slipstream_codec/market_data_codec.h"
 
+#include <cassert>
 #include <bit>
 #include <cstddef>
 #include <cstring>
@@ -11,7 +12,88 @@
 
 namespace slipstream::codec {
 
+bool detail::FixedStreamBuffer::Append(
+    std::span<const std::byte> input) noexcept {
+    const std::size_t buffered = Size();
+    if (input.size() > bytes_.size() - buffered) {
+        return false;
+    }
+
+    if (input.size() > bytes_.size() - tail_) {
+        std::memmove(bytes_.data(), bytes_.data() + head_, buffered);
+        head_ = 0;
+        tail_ = buffered;
+    }
+
+    if (!input.empty()) {
+        std::memcpy(bytes_.data() + tail_, input.data(), input.size());
+        tail_ += input.size();
+    }
+    return true;
+}
+
+void detail::FixedStreamBuffer::Consume(
+    const std::size_t byte_count) noexcept {
+    assert(byte_count <= Size());
+    head_ += byte_count;
+    if (head_ == tail_) {
+        head_ = 0;
+        tail_ = 0;
+    }
+}
+
+std::span<const std::byte> detail::FixedStreamBuffer::ReadableBytes()
+    const noexcept {
+    return {bytes_.data() + head_, Size()};
+}
+
+std::size_t detail::FixedStreamBuffer::Size() const noexcept {
+    return tail_ - head_;
+}
+
 namespace {
+
+template <typename Message, typename DecodeOne>
+StreamDecodeResult decodeStream(
+    detail::FixedStreamBuffer& pending,
+    const std::span<const std::byte> input,
+    std::vector<Message>& output,
+    DecodeOne decode_one) {
+    if (!pending.Append(input)) {
+        return {DecodeStatus::buffer_overflow, 0};
+    }
+
+    std::size_t messages_decoded = 0;
+    while (pending.Size() != 0) {
+        Message message{};
+        const DecodeResult result =
+            decode_one(pending.ReadableBytes(), message);
+
+        if (result.status == DecodeStatus::need_more_data) {
+            return {
+                messages_decoded == 0
+                    ? DecodeStatus::need_more_data
+                    : DecodeStatus::message_ready,
+                messages_decoded,
+            };
+        }
+
+        if (result.status != DecodeStatus::message_ready) {
+            return {result.status, messages_decoded};
+        }
+
+        output.push_back(std::move(message));
+        ++messages_decoded;
+        pending.Consume(result.bytes_consumed);
+    }
+
+    return {
+        messages_decoded == 0
+            ? DecodeStatus::need_more_data
+            : DecodeStatus::message_ready,
+        messages_decoded,
+    };
+}
 
 template <typename Integer>
 Integer convertLittleEndian(Integer value) {
@@ -413,85 +495,23 @@ DecodeResult DecodeSessionControl(
 StreamDecodeResult MarketEventDecoder::Decode(
     std::span<const std::byte> input,
     std::vector<MarketEvent>& output) {
-    pending_.insert(pending_.end(), input.begin(), input.end());
-
-    std::size_t messages_decoded = 0;
-    while (!pending_.empty()) {
-        MarketEvent message{};
-        const DecodeResult result = DecodeMarketEvent(pending_, message);
-
-        if (result.status == DecodeStatus::need_more_data) {
-            return {
-                messages_decoded == 0
-                    ? DecodeStatus::need_more_data
-                    : DecodeStatus::message_ready,
-                messages_decoded,
-            };
-        }
-
-        if (result.status == DecodeStatus::error) {
-            return {DecodeStatus::error, messages_decoded};
-        }
-
-        output.push_back(message);
-        ++messages_decoded;
-        pending_.erase(
-            pending_.begin(),
-            pending_.begin() + static_cast<std::ptrdiff_t>(result.bytes_consumed));
-    }
-
-    return {
-        messages_decoded == 0
-            ? DecodeStatus::need_more_data
-            : DecodeStatus::message_ready,
-        messages_decoded,
-    };
+    return decodeStream(
+        pending_, input, output, DecodeMarketEvent);
 }
 
 std::size_t MarketEventDecoder::BufferedBytes() const noexcept {
-    return pending_.size();
+    return pending_.Size();
 }
 
 StreamDecodeResult SessionControlDecoder::Decode(
     std::span<const std::byte> input,
     std::vector<SessionControlMessage>& output) {
-    pending_.insert(pending_.end(), input.begin(), input.end());
-
-    std::size_t messages_decoded = 0;
-    while (!pending_.empty()) {
-        SessionControlMessage message{};
-        const DecodeResult result = DecodeSessionControl(pending_, message);
-
-        if (result.status == DecodeStatus::need_more_data) {
-            return {
-                messages_decoded == 0
-                    ? DecodeStatus::need_more_data
-                    : DecodeStatus::message_ready,
-                messages_decoded,
-            };
-        }
-
-        if (result.status == DecodeStatus::error) {
-            return {DecodeStatus::error, messages_decoded};
-        }
-
-        output.push_back(message);
-        ++messages_decoded;
-        pending_.erase(
-            pending_.begin(),
-            pending_.begin() + static_cast<std::ptrdiff_t>(result.bytes_consumed));
-    }
-
-    return {
-        messages_decoded == 0
-            ? DecodeStatus::need_more_data
-            : DecodeStatus::message_ready,
-        messages_decoded,
-    };
+    return decodeStream(
+        pending_, input, output, DecodeSessionControl);
 }
 
 std::size_t SessionControlDecoder::BufferedBytes() const noexcept {
-    return pending_.size();
+    return pending_.Size();
 }
 
 std::size_t EncodeNewOrder(
@@ -682,41 +702,12 @@ DecodeResult DecodeOrderEntryClientMessage(
 StreamDecodeResult ClientSideDecoder::Decode(
     std::span<const std::byte> input,
     std::vector<OrderEntryClientMessage>& output) {
-    pending_.insert(pending_.end(), input.begin(), input.end());
-
-    std::size_t messages_decoded = 0;
-    while (!pending_.empty()) {
-        OrderEntryClientMessage message{};
-        const DecodeResult result = DecodeOrderEntryClientMessage(pending_, message);
-        if (result.status == DecodeStatus::need_more_data) {
-            return {
-                messages_decoded == 0
-                    ? DecodeStatus::need_more_data
-                    : DecodeStatus::message_ready,
-                messages_decoded,
-            };
-        }
-        if (result.status == DecodeStatus::error) {
-            return {DecodeStatus::error, messages_decoded};
-        }
-
-        output.push_back(message);
-        ++messages_decoded;
-        pending_.erase(
-            pending_.begin(),
-            pending_.begin() + static_cast<std::ptrdiff_t>(result.bytes_consumed));
-    }
-
-    return {
-        messages_decoded == 0
-            ? DecodeStatus::need_more_data
-            : DecodeStatus::message_ready,
-        messages_decoded,
-    };
+    return decodeStream(
+        pending_, input, output, DecodeOrderEntryClientMessage);
 }
 
 std::size_t ClientSideDecoder::BufferedBytes() const noexcept {
-    return pending_.size();
+    return pending_.Size();
 }
 
 

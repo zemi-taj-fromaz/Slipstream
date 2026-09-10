@@ -16,6 +16,11 @@ md_a_port="14200"
 md_b_group="239.255.0.2"
 md_b_port="14201"
 md_multicast_interface="0.0.0.0"
+main_cpu="0"
+network_cpu="2"
+engine_cpu="3"
+md_client_cpu="4"
+oe_client_cpu="5"
 server_args=()
 
 while (($# > 0)); do
@@ -64,6 +69,26 @@ while (($# > 0)); do
             md_multicast_interface="$2"
             shift 2
             ;;
+        --main-cpu)
+            main_cpu="$2"
+            shift 2
+            ;;
+        --network-cpu)
+            network_cpu="$2"
+            shift 2
+            ;;
+        --engine-cpu)
+            engine_cpu="$2"
+            shift 2
+            ;;
+        --md-client-cpu)
+            md_client_cpu="$2"
+            shift 2
+            ;;
+        --oe-client-cpu)
+            oe_client_cpu="$2"
+            shift 2
+            ;;
         *)
             server_args+=("$1")
             shift
@@ -82,6 +107,9 @@ server_args+=(
     --md-b-group "${md_b_group}"
     --md-b-port "${md_b_port}"
     --md-multicast-interface "${md_multicast_interface}"
+    --main-cpu "${main_cpu}"
+    --network-cpu "${network_cpu}"
+    --engine-cpu "${engine_cpu}"
 )
 
 server="${build_dir}/slipstream/slipstream"
@@ -136,6 +164,7 @@ echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
     --md-b-group "${md_b_group}" \
     --md-b-port "${md_b_port}" \
     --md-multicast-interface "${md_multicast_interface}" \
+    --cpu "${md_client_cpu}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 
@@ -148,6 +177,7 @@ fi
     --host "${oe_host}" \
     --port "${oe_port}" \
     --transport "${oe_transport}" \
+    --cpu "${oe_client_cpu}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 

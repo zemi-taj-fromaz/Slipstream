@@ -362,6 +362,47 @@ TEST(MarketEventDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
+TEST(MarketEventDecoder, CompactsFixedBufferWhenTailSpaceRunsOut) {
+    constexpr std::size_t frame_count = 200;
+    constexpr std::size_t chunk_size = 4093;
+    const auto frame = Encode(MakeQuote());
+
+    std::vector<std::byte> stream;
+    stream.reserve(frame.size() * frame_count);
+    for (std::size_t index = 0; index < frame_count; ++index) {
+        stream.insert(stream.end(), frame.begin(), frame.end());
+    }
+
+    MarketEventDecoder decoder;
+    std::vector<MarketEvent> decoded;
+    decoded.reserve(frame_count);
+
+    for (std::size_t offset = 0; offset < stream.size(); offset += chunk_size) {
+        const std::size_t count = std::min(chunk_size, stream.size() - offset);
+        const auto result = decoder.Decode(
+            std::span<const std::byte>{stream}.subspan(offset, count),
+            decoded);
+        EXPECT_NE(result.status, DecodeStatus::buffer_overflow);
+        EXPECT_NE(result.status, DecodeStatus::error);
+    }
+
+    EXPECT_EQ(decoded.size(), frame_count);
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
+}
+
+TEST(MarketEventDecoder, ReportsFixedBufferOverflow) {
+    std::array<std::byte, stream_decoder_capacity + 1> oversized{};
+    MarketEventDecoder decoder;
+    std::vector<MarketEvent> decoded;
+
+    const auto result = decoder.Decode(oversized, decoded);
+
+    EXPECT_EQ(result.status, DecodeStatus::buffer_overflow);
+    EXPECT_EQ(result.messages_decoded, 0U);
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
+    EXPECT_TRUE(decoded.empty());
+}
+
 TEST(MarketDataCodec, EncodesAndDecodesHeartbeat) {
     constexpr HeartbeatMessage expected{.ts_ns = 0x0102030405060708ULL};
     std::array<std::byte, 12> frame{};
@@ -493,6 +534,19 @@ TEST(SessionControlDecoder, DecodesCoalescedFramesAndRetainsPartialFrame) {
     EXPECT_EQ(decoded[1].state, second_message.state);
     EXPECT_EQ(second_result.messages_decoded, 1U);
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
+}
+
+TEST(SessionControlDecoder, ReportsFixedBufferOverflow) {
+    std::array<std::byte, stream_decoder_capacity + 1> oversized{};
+    SessionControlDecoder decoder;
+    std::vector<SessionControlMessage> decoded;
+
+    const auto result = decoder.Decode(oversized, decoded);
+
+    EXPECT_EQ(result.status, DecodeStatus::buffer_overflow);
+    EXPECT_EQ(result.messages_decoded, 0U);
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
+    EXPECT_TRUE(decoded.empty());
 }
 
 TEST(ClientSideDecoder, ReassemblesHeartbeatAndSessionControlFromChunks) {

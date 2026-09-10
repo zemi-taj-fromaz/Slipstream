@@ -275,4 +275,17 @@ TEST(ClientSideDecoder, DecodesExecReport) {
     EXPECT_EQ(decoder.BufferedBytes(), 0U);
 }
 
+TEST(ClientSideDecoder, ReportsFixedBufferOverflow) {
+    std::array<std::byte, stream_decoder_capacity + 1> oversized{};
+    ClientSideDecoder decoder;
+    std::vector<OrderEntryClientMessage> decoded;
+
+    const auto result = decoder.Decode(oversized, decoded);
+
+    EXPECT_EQ(result.status, DecodeStatus::buffer_overflow);
+    EXPECT_EQ(result.messages_decoded, 0U);
+    EXPECT_EQ(decoder.BufferedBytes(), 0U);
+    EXPECT_TRUE(decoded.empty());
+}
+
 } // namespace

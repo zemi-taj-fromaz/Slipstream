@@ -4,6 +4,7 @@
 
 #include "SlipstreamConfig.h"
 #include "Queues.h"
+#include "thread_config.h"
 
 #include <exception>
 #include <atomic>
@@ -139,6 +140,18 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
         } else if (option == "--transport") {
             config.transport = NextValue();
 
+        } else if (option == "--main-cpu") {
+            config.main_cpu =
+                ParseNumber<unsigned>(NextValue(), option);
+
+        } else if (option == "--network-cpu") {
+            config.network_cpu =
+                ParseNumber<unsigned>(NextValue(), option);
+
+        } else if (option == "--engine-cpu") {
+            config.engine_cpu =
+                ParseNumber<unsigned>(NextValue(), option);
+
         } else {
             throw std::invalid_argument(
                 "unknown argument: " +
@@ -168,6 +181,9 @@ int main(int argc, char* argv[]) {
 
     try {
         const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);
+        utils::ConfigureCurrentThread(
+            "slip-main",
+            slipstream_config.main_cpu);
         slipstream::MarketEventQueue ingress;
         slipstream::OrderEntryQueue egress;
         std::atomic<std::uint64_t> ingress_generation{0};
@@ -214,6 +230,9 @@ int main(int argc, char* argv[]) {
 
         std::jthread network_thread{[&] {
             try {
+                utils::ConfigureCurrentThread(
+                    "slip-network",
+                    slipstream_config.network_cpu);
                 server_transport->Run();
             } catch (...) {
                 network_error = std::current_exception();
@@ -222,6 +241,9 @@ int main(int argc, char* argv[]) {
 
         std::jthread engine_thread{[&] {
             try {
+                utils::ConfigureCurrentThread(
+                    "slip-engine",
+                    slipstream_config.engine_cpu);
                 engine.Run();
             } catch (...) {
                 engine_error = std::current_exception();

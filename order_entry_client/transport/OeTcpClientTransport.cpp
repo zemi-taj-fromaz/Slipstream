@@ -132,6 +132,11 @@ utils::ConnectionResult OeTcpClientTransport::ReceiveAvailable() {
                 {buffer.data(), static_cast<std::size_t>(recvd)},
                 messages);
 
+            if (result.status ==
+                slipstream::codec::DecodeStatus::buffer_overflow) {
+                throw std::runtime_error(
+                    "OE server response decoder buffer overflow");
+            }
             if (result.status == slipstream::codec::DecodeStatus::error) {
                 throw std::runtime_error(
                     "failed to decode OE server response");

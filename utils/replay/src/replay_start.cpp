@@ -33,8 +33,10 @@ std::uint64_t ParseUnsigned(
 
 ReplayClientOptions ParseReplayClientOptions(
     int argc,
-    char* const argv[]) {
+    char* const argv[],
+    const unsigned default_cpu) {
     ReplayClientOptions options{};
+    options.cpu = default_cpu;
     bool has_host = false;
     bool has_port = false;
     bool has_start = false;
@@ -70,6 +72,13 @@ ReplayClientOptions ParseReplayClientOptions(
         } else if (option == "--start-at-ns") {
             options.start_at_ns = ParseUnsigned(value, option);
             has_start = true;
+        } else if (option == "--cpu") {
+            const std::uint64_t cpu = ParseUnsigned(value, option);
+            if (cpu > std::numeric_limits<unsigned>::max()) {
+                throw std::invalid_argument(
+                    "--cpu exceeds the supported range");
+            }
+            options.cpu = static_cast<unsigned>(cpu);
         } else if (option == "--md-a-group") {
             options.md_a_group = value;
         } else if (option == "--md-a-port") {
@@ -103,6 +112,7 @@ ReplayClientOptions ParseReplayClientOptions(
             "usage: " + std::string{argv[0]} +
             " --host <IPv4-address> --port <port> "
             "--start-at-ns <unix-nanoseconds> "
+            "[--cpu <logical-cpu>] "
             "[--transport tcp|grpc|udp-multicast] "
             "[--md-a-group <IPv4-multicast-address>] "
             "[--md-a-port <port>] "

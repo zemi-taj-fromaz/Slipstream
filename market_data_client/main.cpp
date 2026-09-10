@@ -3,6 +3,7 @@
 #include "process_rows.h"
 #include "replay_start.h"
 #include "slipstream.grpc.pb.h"
+#include "thread_config.h"
 #include "transport/MdGrpcClientTransport.h"
 #include "transport/MdTcpClientTransport.h"
 #include "transport/MdUdpMulticastClientTransport.h"
@@ -29,7 +30,8 @@ int main(int argc, char* argv[]) {
 
     try {
         const utils::ReplayClientOptions options =
-            utils::ParseReplayClientOptions(argc, argv);
+            utils::ParseReplayClientOptions(argc, argv, 4);
+        utils::ConfigureCurrentThread("slip-md-client", options.cpu);
         const auto events = parse_csv(csv_path);
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);
         logger.info("Replay starts at Unix nanoseconds {}", options.start_at_ns);

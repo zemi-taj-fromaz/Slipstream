@@ -345,6 +345,10 @@ void UdpMulticastServerTransport::recvOrderEntry(
                 }
             }
 
+            if (result.status == codec::DecodeStatus::buffer_overflow) {
+                throw std::runtime_error(
+                    "order-entry decoder buffer overflow");
+            }
             if (result.status == codec::DecodeStatus::error) {
                 throw std::runtime_error(
                     "invalid order-entry inbound frame");

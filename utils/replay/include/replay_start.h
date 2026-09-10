@@ -11,6 +11,7 @@ struct ReplayClientOptions {
     std::string transport{"tcp"};
     std::uint16_t port;
     std::uint64_t start_at_ns;
+    unsigned cpu;
     std::string md_a_group{"239.255.0.1"};
     std::uint16_t md_a_port{14'200};
     std::string md_b_group{"239.255.0.2"};
@@ -20,7 +21,8 @@ struct ReplayClientOptions {
 
 [[nodiscard]] ReplayClientOptions ParseReplayClientOptions(
     int argc,
-    char* const argv[]);
+    char* const argv[],
+    unsigned default_cpu);
 
 [[nodiscard]] bool ReplayVerificationEnabled() noexcept;
 

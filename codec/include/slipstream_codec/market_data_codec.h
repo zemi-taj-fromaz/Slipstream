@@ -3,6 +3,7 @@
 
 #include "market_event.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -35,6 +36,7 @@ constexpr std::size_t max_multicast_datagram_size =
     multicast_header_size + max_market_data_frame_size;
 constexpr std::size_t max_order_frame_size =
     frame_header_size + new_order_body_size;
+constexpr std::size_t stream_decoder_capacity = 8 * 1024;
 
 struct MulticastHeader {
     std::uint64_t sequence{0};
@@ -115,6 +117,7 @@ using OrderEntryClientMessage = std::variant<
 enum class DecodeStatus {
     message_ready,
     need_more_data,
+    buffer_overflow,
     error,
 };
 
@@ -127,6 +130,28 @@ struct StreamDecodeResult {
     DecodeStatus status{DecodeStatus::need_more_data};
     std::size_t messages_decoded{0};
 };
+
+namespace detail {
+
+class FixedStreamBuffer {
+public:
+    [[nodiscard]] bool Append(
+        std::span<const std::byte> input) noexcept;
+
+    void Consume(std::size_t byte_count) noexcept;
+
+    [[nodiscard]] std::span<const std::byte> ReadableBytes()
+        const noexcept;
+
+    [[nodiscard]] std::size_t Size() const noexcept;
+
+private:
+    std::array<std::byte, stream_decoder_capacity> bytes_{};
+    std::size_t head_{0};
+    std::size_t tail_{0};
+};
+
+} // namespace detail
 
 enum class MulticastDecodeStatus {
     message_ready,
@@ -182,7 +207,7 @@ public:
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
 private:
-    std::vector<std::byte> pending_;
+    detail::FixedStreamBuffer pending_;
 };
 
 
@@ -193,7 +218,7 @@ public:
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
 private:
-    std::vector<std::byte> pending_;
+    detail::FixedStreamBuffer pending_;
 };
 
 [[nodiscard]] std::size_t EncodeNewOrder(
@@ -225,7 +250,7 @@ public:
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
 private:
-    std::vector<std::byte> pending_;
+    detail::FixedStreamBuffer pending_;
 };
 
 } // namespace slipstream::codec

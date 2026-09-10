@@ -227,6 +227,10 @@ void TcpPollServerTransport::recvMarketEvent(
                 }
             }
 
+            if (result.status == codec::DecodeStatus::buffer_overflow) {
+                throw std::runtime_error(
+                    "server inbound decoder buffer overflow");
+            }
             if (result.status == codec::DecodeStatus::error) {
                 throw std::runtime_error(
                     "invalid server inbound frame");

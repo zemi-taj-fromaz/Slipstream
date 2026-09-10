@@ -10,6 +10,8 @@ add_library(UTILS STATIC
     replay/include/replay_start.h
     replay/src/replay_start.cpp
     socket/include/socket.h
+    thread/include/thread_config.h
+    thread/src/thread_config.cpp
     transport/include/client_transport.h
     concurrent_queues/spsc_queue.h
 )
@@ -20,6 +22,7 @@ target_include_directories(UTILS
         ${CMAKE_CURRENT_SOURCE_DIR}/csv_parser/include
         ${CMAKE_CURRENT_SOURCE_DIR}/replay/include
         ${CMAKE_CURRENT_SOURCE_DIR}/socket/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/thread/include
         ${CMAKE_CURRENT_SOURCE_DIR}/transport/include
         ${CMAKE_CURRENT_SOURCE_DIR}/concurrent_queues
 )
