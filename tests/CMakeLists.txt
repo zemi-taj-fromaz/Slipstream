@@ -2,11 +2,6 @@ include(GoogleTest)
 
 add_executable(csv_parser_tests
     csv_parser_tests.cpp
-        ../slipstream/SlipstreamConfig.h
-        ../slipstream/TradeManager.cpp
-        ../slipstream/TradeManager.h
-        ../slipstream/VwapWindow.cpp
-        ../slipstream/VwapWindow.h
 )
 
 target_link_libraries(csv_parser_tests
@@ -86,3 +81,60 @@ target_link_libraries(order_codec_tests
 )
 
 gtest_discover_tests(order_codec_tests)
+
+add_executable(spsc_queue_tests
+    spsc_queue_tests.cpp
+)
+
+target_link_libraries(spsc_queue_tests
+    PRIVATE
+        UTILS
+        GTest::gtest_main
+)
+
+gtest_discover_tests(spsc_queue_tests)
+
+add_executable(trade_manager_tests
+    trade_manager_tests.cpp
+    ../slipstream/TradeManager.cpp
+    ../slipstream/VwapWindow.cpp
+)
+
+target_include_directories(trade_manager_tests
+    PRIVATE
+        ../slipstream
+)
+
+target_link_libraries(trade_manager_tests
+    PRIVATE
+        UTILS
+        GTest::gtest_main
+)
+
+gtest_discover_tests(trade_manager_tests)
+
+add_executable(engine_tests
+    engine_tests.cpp
+    ../slipstream/Engine.cpp
+    ../slipstream/TradeManager.cpp
+    ../slipstream/VwapWindow.cpp
+)
+
+target_include_directories(engine_tests
+    PRIVATE
+        ../slipstream
+)
+
+target_link_libraries(engine_tests
+    PRIVATE
+        UTILS
+        slipstream_codec
+        GTest::gtest_main
+)
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(spsc_queue_tests PRIVATE -Wno-interference-size)
+    target_compile_options(engine_tests PRIVATE -Wno-interference-size)
+endif()
+
+gtest_discover_tests(engine_tests)
