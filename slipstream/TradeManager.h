@@ -7,7 +7,7 @@
 
 #include "VwapWindow.h"
 #include <cstdint>
-#include <memory>
+#include <optional>
 #include <variant>
 #include "market_event.h"
 
@@ -40,7 +40,7 @@ public:
 
 private:
     VwapWindow vwap_window;
-    std::unique_ptr<L1Book> book;
+    std::optional<L1Book> book;
 };
 
 #endif //SLIPSTREAM_TRADEMANAGER_H

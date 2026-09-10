@@ -5,6 +5,7 @@
 #include <cstring>
 #include <span>
 #include <stdexcept>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -365,8 +366,8 @@ std::size_t EncodeSessionControl(
     if (output.size() < frame_size) {
         throw std::runtime_error("output buffer too small for session control frame");
     }
-    if (static_cast<std::uint8_t>(message.state) >
-        static_cast<std::uint8_t>(SessionState::close)) {
+    if (std::to_underlying(message.state) >
+        std::to_underlying(SessionState::close)) {
         throw std::runtime_error("invalid session control state");
     }
 
@@ -378,7 +379,7 @@ std::size_t EncodeSessionControl(
         output.subspan(frame_header_size, sizeof(message.ts_ns)),
         message.ts_ns);
     output[frame_header_size + sizeof(message.ts_ns)] =
-        static_cast<std::byte>(message.state);
+        static_cast<std::byte>(std::to_underlying(message.state));
     return frame_size;
 }
 
@@ -400,7 +401,7 @@ DecodeResult DecodeSessionControl(
     }
 
     const std::uint8_t raw_state = std::to_integer<std::uint8_t>(input[12]);
-    if (raw_state > static_cast<std::uint8_t>(SessionState::close)) {
+    if (raw_state > std::to_underlying(SessionState::close)) {
         return {DecodeStatus::error, 0};
     }
 
@@ -511,12 +512,14 @@ std::size_t EncodeNewOrder(
     offset += 8;
     std::memcpy(output.data() + offset, message.symbol, sizeof(message.symbol));
     offset += sizeof(message.symbol);
-    output[offset++] = static_cast<std::byte>(message.status);
+    output[offset++] =
+        static_cast<std::byte>(std::to_underlying(message.status));
     writeUint64LittleEndian(output.subspan(offset, 8), message.ts_ns);
     offset += 8;
     writeInt64LittleEndian(output.subspan(offset, 8), message.trade_id);
     offset += 8;
-    output[offset++] = static_cast<std::byte>(message.side);
+    output[offset++] =
+        static_cast<std::byte>(std::to_underlying(message.side));
     writeUint32LittleEndian(output.subspan(offset, 4), message.qty);
     offset += 4;
     writeInt64LittleEndian(output.subspan(offset, 8), message.limit_px);
@@ -570,10 +573,10 @@ std::size_t EncodeExecReport(
     if (output.size() < frame_size) {
         throw std::runtime_error("output buffer too small for ExecReport frame");
     }
-    if (static_cast<std::uint8_t>(message.status) >
-            static_cast<std::uint8_t>(ExecStatus::reject) ||
-        static_cast<std::uint8_t>(message.reason_code) >
-            static_cast<std::uint8_t>(RejectReason::throttle)) {
+    if (std::to_underlying(message.status) >
+            std::to_underlying(ExecStatus::reject) ||
+        std::to_underlying(message.reason_code) >
+            std::to_underlying(RejectReason::throttle)) {
         throw std::runtime_error("invalid ExecReport enum value");
     }
 
@@ -584,12 +587,14 @@ std::size_t EncodeExecReport(
     offset += 8;
     writeUint64LittleEndian(output.subspan(offset, 8), message.ts_ns);
     offset += 8;
-    output[offset++] = static_cast<std::byte>(message.status);
+    output[offset++] =
+        static_cast<std::byte>(std::to_underlying(message.status));
     writeUint32LittleEndian(output.subspan(offset, 4), message.filled_qty);
     offset += 4;
     writeInt64LittleEndian(output.subspan(offset, 8), message.avg_px);
     offset += 8;
-    output[offset++] = static_cast<std::byte>(message.reason_code);
+    output[offset++] =
+        static_cast<std::byte>(std::to_underlying(message.reason_code));
 
     return offset;
 }
@@ -622,10 +627,10 @@ DecodeResult DecodeExecReport(
     output.reason_code = static_cast<RejectReason>(
         std::to_integer<std::uint8_t>(input[offset++]));
 
-    if (static_cast<std::uint8_t>(output.status) >
-            static_cast<std::uint8_t>(ExecStatus::reject) ||
-        static_cast<std::uint8_t>(output.reason_code) >
-            static_cast<std::uint8_t>(RejectReason::throttle)) {
+    if (std::to_underlying(output.status) >
+            std::to_underlying(ExecStatus::reject) ||
+        std::to_underlying(output.reason_code) >
+            std::to_underlying(RejectReason::throttle)) {
         return {DecodeStatus::error, 0};
     }
     return {DecodeStatus::message_ready, offset};

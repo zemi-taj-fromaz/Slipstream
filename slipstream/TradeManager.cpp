@@ -32,7 +32,7 @@ TradeManager::TradeManager(const SlipstreamConfig& slipstream) : vwap_window(sli
 TradeManagerResult TradeManager::Push(MarketEvent& event) {
     if (auto* quote = std::get_if<Quote>(&event.payload)) {
         if (!book) {
-            book = std::make_unique<L1Book>(L1Book{
+            book.emplace(L1Book{
                 .bid_price = quote->bid_price,
                 .ask_price = quote->ask_price,
                 .bid_qty = quote->bid_qty,
