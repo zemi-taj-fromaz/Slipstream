@@ -100,9 +100,9 @@ enum class RejectReason : std::uint8_t {
 struct ExecReportMessage {
     std::uint64_t client_order_id{0};
     std::uint64_t ts_ns{0};
-    ExecStatus status{ExecStatus::ack};
-    std::uint32_t filled_qty{0};
     std::int64_t avg_px{0};
+    std::uint32_t filled_qty{0};
+    ExecStatus status{ExecStatus::ack};
     RejectReason reason_code{RejectReason::none};
 };
 

@@ -121,8 +121,8 @@ std::vector<MarketEvent> FileReader::Parse() const {
             if (fields[1] == "Q") {
                 event.payload = Quote{
                     .bid_price = ParsePrice(fields[3], row_number),
-                    .bid_qty = ParseQuantity(fields[4], row_number),
                     .ask_price = ParsePrice(fields[5], row_number),
+                    .bid_qty = ParseQuantity(fields[4], row_number),
                     .ask_qty = ParseQuantity(fields[6], row_number),
                 };
             } else if (fields[1] == "T") {

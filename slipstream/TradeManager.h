@@ -13,9 +13,8 @@
 
 struct L1Book {
     std::int64_t bid_price{};
-    std::uint32_t bid_qty{};
-
     std::int64_t ask_price{};
+    std::uint32_t bid_qty{};
     std::uint32_t ask_qty{};
 };
 

@@ -21,8 +21,8 @@ MarketEvent MakeQuote() {
         .symbol = {},
         .payload = Quote{
             .bid_price = 0x1112131415161718LL,
-            .bid_qty = 0x0A0B0C0D,
             .ask_price = 0x2122232425262728LL,
+            .bid_qty = 0x0A0B0C0D,
             .ask_qty = 0x1A1B1C1D,
         },
     };

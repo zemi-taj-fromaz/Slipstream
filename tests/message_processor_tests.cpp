@@ -16,8 +16,8 @@ MarketEvent QuoteEvent() {
         .symbol = {},
         .payload = Quote{
             .bid_price = 1'012'300,
-            .bid_qty = 100,
             .ask_price = 1'012'500,
+            .bid_qty = 100,
             .ask_qty = 200,
         },
     };

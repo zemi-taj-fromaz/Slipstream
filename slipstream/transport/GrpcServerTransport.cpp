@@ -59,8 +59,8 @@ MarketEvent FromGrpcQuote(const grpc_api::Quote& quote) {
     CopySymbol(quote.symbol(), event.symbol);
     event.payload = Quote{
         .bid_price = quote.bid_price(),
-        .bid_qty = quote.bid_qty(),
         .ask_price = quote.ask_price(),
+        .bid_qty = quote.bid_qty(),
         .ask_qty = quote.ask_qty(),
     };
     return event;

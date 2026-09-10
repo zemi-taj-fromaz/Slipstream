@@ -83,18 +83,18 @@ TEST(ExecutionReport, WritesTickToOrderHistogramCsv) {
 
 TEST(ExecutionReport, FormatsBuyOnlySession) {
     ExecutionReport report{
-        .market_qty = 400'000,
-        .submitted_qty = 50'000,
-        .executed_qty = 47'300,
         .market_pq_sum =
             static_cast<__int128_t>(1'012'701) * 400'000,
         .executed_pq_sum =
             static_cast<__int128_t>(1'012'438) * 47'300,
-        .buy_qty = 47'300,
-        .sell_qty = 0,
         .buy_pq_sum =
             static_cast<__int128_t>(1'012'438) * 47'300,
         .sell_pq_sum = 0,
+        .market_qty = 400'000,
+        .submitted_qty = 50'000,
+        .executed_qty = 47'300,
+        .buy_qty = 47'300,
+        .sell_qty = 0,
     };
     SlipstreamConfig config{};
     config.symbol = "SYNTH1";
@@ -119,18 +119,18 @@ TEST(ExecutionReport, FormatsBuyOnlySession) {
 
 TEST(ExecutionReport, TreatsSellAboveVwapAsFavorable) {
     ExecutionReport report{
-        .market_qty = 10'000,
-        .submitted_qty = 100,
-        .executed_qty = 100,
         .market_pq_sum =
             static_cast<__int128_t>(1'000'000) * 10'000,
         .executed_pq_sum =
             static_cast<__int128_t>(1'010'000) * 100,
-        .buy_qty = 0,
-        .sell_qty = 100,
         .buy_pq_sum = 0,
         .sell_pq_sum =
             static_cast<__int128_t>(1'010'000) * 100,
+        .market_qty = 10'000,
+        .submitted_qty = 100,
+        .executed_qty = 100,
+        .buy_qty = 0,
+        .sell_qty = 100,
     };
     SlipstreamConfig config{};
 

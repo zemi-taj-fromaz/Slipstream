@@ -181,9 +181,9 @@ void Engine::Run() {
                 const slipstream::codec::ExecReportMessage reject_report{
                     .client_order_id = client_order_id,
                     .ts_ns = event.ts,
-                    .status = slipstream::codec::ExecStatus::reject,
-                    .filled_qty = 0,
                     .avg_px = 0,
+                    .filled_qty = 0,
+                    .status = slipstream::codec::ExecStatus::reject,
                     .reason_code = reason,
                 };
 
@@ -194,9 +194,9 @@ void Engine::Run() {
                 const slipstream::codec::ExecReportMessage ack_report{
                     .client_order_id = client_order_id,
                     .ts_ns = event.ts,
-                    .status = slipstream::codec::ExecStatus::ack,
-                    .filled_qty = 0,
                     .avg_px = 0,
+                    .filled_qty = 0,
+                    .status = slipstream::codec::ExecStatus::ack,
                     .reason_code = slipstream::codec::RejectReason::none,
                 };
 
@@ -207,11 +207,11 @@ void Engine::Run() {
                 const slipstream::codec::ExecReportMessage final_report{
                     .client_order_id = client_order_id,
                     .ts_ns = event.ts,
+                    .avg_px = trade->price,
+                    .filled_qty = decision.executed_qty,
                     .status = partial
                         ? slipstream::codec::ExecStatus::partial
                         : slipstream::codec::ExecStatus::fill,
-                    .filled_qty = decision.executed_qty,
-                    .avg_px = trade->price,
                     .reason_code = reason,
                 };
 

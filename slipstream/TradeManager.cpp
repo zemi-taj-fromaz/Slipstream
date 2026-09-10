@@ -34,8 +34,8 @@ TradeManagerResult TradeManager::Push(MarketEvent& event) {
         if (!book) {
             book = std::make_unique<L1Book>(L1Book{
                 .bid_price = quote->bid_price,
-                .bid_qty = quote->bid_qty,
                 .ask_price = quote->ask_price,
+                .bid_qty = quote->bid_qty,
                 .ask_qty = quote->ask_qty,
             });
             return MarketUpdateResult{};
@@ -98,8 +98,8 @@ TradeManagerResult TradeManager::Push(MarketEvent& event) {
 
         *book = L1Book{
             .bid_price = quote->bid_price,
-            .bid_qty = quote->bid_qty,
             .ask_price = quote->ask_price,
+            .bid_qty = quote->bid_qty,
             .ask_qty = quote->ask_qty,
         };
 

@@ -17,12 +17,11 @@ namespace slipstream {
 
 struct EncodedFrame {
     static constexpr std::size_t capacity = codec::max_order_frame_size;
-    std::array<std::byte, capacity> bytes{};
-
     std::size_t size{};
     std::size_t sent{};
     std::uint64_t trigger_received_at_ns{};
     bool measure_tick_to_order{};
+    std::array<std::byte, capacity> bytes{};
 
     [[nodiscard]] bool complete() const noexcept { return sent == size; }
     [[nodiscard]] std::span<const std::byte> remainingBytes() const noexcept {

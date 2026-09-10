@@ -34,9 +34,9 @@ ExecReportMessage MakeExecReport() {
     return {
         .client_order_id = 0x0102030405060708ULL,
         .ts_ns = 0x1112131415161718ULL,
-        .status = ExecStatus::partial,
-        .filled_qty = 0x21222324,
         .avg_px = 0x3132333435363738LL,
+        .filled_qty = 0x21222324,
+        .status = ExecStatus::partial,
         .reason_code = RejectReason::price,
     };
 }

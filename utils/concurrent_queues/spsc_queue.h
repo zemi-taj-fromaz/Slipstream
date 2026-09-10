@@ -63,9 +63,9 @@ private:
     static constexpr std::size_t capacityMask = Capacity - 1;
 
     alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> writeIdx{0uz};
-    alignas(std::hardware_destructive_interference_size) std::size_t cachedWriteIdx{0uz};
+    std::size_t cachedReadIdx{0uz};
     alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> readIdx{0uz};
-    alignas(std::hardware_destructive_interference_size) std::size_t cachedReadIdx{0uz};
+    std::size_t cachedWriteIdx{0uz};
 };
 }
 
