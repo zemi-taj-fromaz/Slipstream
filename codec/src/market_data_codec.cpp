@@ -12,7 +12,7 @@
 
 namespace slipstream::codec {
 
-bool detail::FixedStreamBuffer::Append(
+bool FixedStreamBuffer::Append(
     std::span<const std::byte> input) noexcept {
     const std::size_t buffered = Size();
     if (input.size() > bytes_.size() - buffered) {
@@ -32,7 +32,7 @@ bool detail::FixedStreamBuffer::Append(
     return true;
 }
 
-void detail::FixedStreamBuffer::Consume(
+void FixedStreamBuffer::Consume(
     const std::size_t byte_count) noexcept {
     assert(byte_count <= Size());
     head_ += byte_count;
@@ -42,12 +42,12 @@ void detail::FixedStreamBuffer::Consume(
     }
 }
 
-std::span<const std::byte> detail::FixedStreamBuffer::ReadableBytes()
+std::span<const std::byte> FixedStreamBuffer::ReadableBytes()
     const noexcept {
     return {bytes_.data() + head_, Size()};
 }
 
-std::size_t detail::FixedStreamBuffer::Size() const noexcept {
+std::size_t FixedStreamBuffer::Size() const noexcept {
     return tail_ - head_;
 }
 
@@ -55,7 +55,7 @@ namespace {
 
 template <typename Message, typename DecodeOne>
 StreamDecodeResult decodeStream(
-    detail::FixedStreamBuffer& pending,
+    FixedStreamBuffer& pending,
     const std::span<const std::byte> input,
     std::vector<Message>& output,
     DecodeOne decode_one) {

@@ -131,8 +131,6 @@ struct StreamDecodeResult {
     std::size_t messages_decoded{0};
 };
 
-namespace detail {
-
 class FixedStreamBuffer {
 public:
     [[nodiscard]] bool Append(
@@ -150,8 +148,6 @@ private:
     std::size_t head_{0};
     std::size_t tail_{0};
 };
-
-} // namespace detail
 
 enum class MulticastDecodeStatus {
     message_ready,
@@ -207,7 +203,7 @@ public:
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
 private:
-    detail::FixedStreamBuffer pending_;
+    FixedStreamBuffer pending_;
 };
 
 
@@ -218,7 +214,7 @@ public:
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
 private:
-    detail::FixedStreamBuffer pending_;
+    FixedStreamBuffer pending_;
 };
 
 [[nodiscard]] std::size_t EncodeNewOrder(
@@ -250,7 +246,7 @@ public:
     [[nodiscard]] std::size_t BufferedBytes() const noexcept;
 
 private:
-    detail::FixedStreamBuffer pending_;
+    FixedStreamBuffer pending_;
 };
 
 } // namespace slipstream::codec
