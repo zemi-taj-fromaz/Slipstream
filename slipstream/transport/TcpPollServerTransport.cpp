@@ -198,7 +198,9 @@ void TcpPollServerTransport::recvMarketEvent(
             const auto result = decoder.Decode(received_bytes,recv_messages);
 
             for (auto& recv_message : recv_messages) {
-                if (std::strcmp(recv_message.symbol,config_.symbol.c_str()) != 0) {
+                if (std::strcmp(
+                        recv_message.symbol,
+                        config_.symbol.c_str()) != 0) [[likely]] {
                     continue;
                 }
 
@@ -211,7 +213,7 @@ void TcpPollServerTransport::recvMarketEvent(
                         .message = recv_message,
                         .received_at_ns = received_at_ns,
                     };
-                    if (!ingress->push(inbound)) {
+                    if (!ingress->push(inbound)) [[unlikely]] {
                         throw std::runtime_error(
                             "failed to enqueue MarketEvent");
                     }

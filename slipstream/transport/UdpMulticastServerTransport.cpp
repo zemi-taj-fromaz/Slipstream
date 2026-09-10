@@ -269,7 +269,7 @@ void UdpMulticastServerTransport::processMulticastMarketData(
 
     if (std::strcmp(
             datagram.event.symbol,
-            config_.symbol.c_str()) != 0) {
+            config_.symbol.c_str()) != 0) [[likely]] {
         return;
     }
 
@@ -278,7 +278,7 @@ void UdpMulticastServerTransport::processMulticastMarketData(
             .message = datagram.event,
             .received_at_ns = received_at_ns,
         };
-        if (!ingress->push(inbound)) {
+        if (!ingress->push(inbound)) [[unlikely]] {
             throw std::runtime_error(
                 "failed to enqueue MarketEvent");
         }
@@ -315,7 +315,7 @@ void UdpMulticastServerTransport::recvOrderEntry(
             for (const MarketEvent& recv_message : recv_messages) {
                 if (std::strcmp(
                         recv_message.symbol,
-                        config_.symbol.c_str()) != 0) {
+                        config_.symbol.c_str()) != 0) [[likely]] {
                     continue;
                 }
 
@@ -329,7 +329,7 @@ void UdpMulticastServerTransport::recvOrderEntry(
                         .message = recv_message,
                         .received_at_ns = received_at_ns,
                     };
-                    if (!ingress->push(inbound)) {
+                    if (!ingress->push(inbound)) [[unlikely]] {
                         throw std::runtime_error(
                             "failed to enqueue MarketEvent");
                     }

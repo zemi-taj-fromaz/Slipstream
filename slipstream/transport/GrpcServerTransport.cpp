@@ -218,7 +218,9 @@ private:
 
     void processQuote() {
         MarketEvent event = FromGrpcQuote(quote_);
-        if (std::strcmp(event.symbol, owner_.config_.symbol.c_str()) != 0) {
+        if (std::strcmp(
+                event.symbol,
+                owner_.config_.symbol.c_str()) != 0) [[likely]] {
             return;
         }
 
@@ -226,7 +228,7 @@ private:
             .message = std::move(event),
             .received_at_ns = MonotonicNowNs(),
         };
-        if (!owner_.ingress_.push(inbound)) {
+        if (!owner_.ingress_.push(inbound)) [[unlikely]] {
             throw std::runtime_error("failed to enqueue gRPC quote");
         }
 
@@ -354,20 +356,25 @@ private:
 
         if (inbound_.payload_case() == grpc_api::OeClientMessage::kTrade) {
             MarketEvent event = FromGrpcTrade(inbound_.trade());
-            if (std::strcmp(event.symbol, owner_.config_.symbol.c_str()) == 0) {
-                owner_.markOeActivity();
-                const InboundEvent inbound{
-                    .message = std::move(event),
-                    .received_at_ns = MonotonicNowNs(),
-                };
-                if (!owner_.ingress_.push(inbound)) {
-                    throw std::runtime_error("failed to enqueue gRPC trade");
-                }
-                owner_.ingress_generation_.fetch_add(
-                    1,
-                    std::memory_order_release);
-                owner_.ingress_generation_.notify_one();
+            if (std::strcmp(
+                    event.symbol,
+                    owner_.config_.symbol.c_str()) != 0) [[likely]] {
+                startRead();
+                return;
             }
+
+            owner_.markOeActivity();
+            const InboundEvent inbound{
+                .message = std::move(event),
+                .received_at_ns = MonotonicNowNs(),
+            };
+            if (!owner_.ingress_.push(inbound)) [[unlikely]] {
+                throw std::runtime_error("failed to enqueue gRPC trade");
+            }
+            owner_.ingress_generation_.fetch_add(
+                1,
+                std::memory_order_release);
+            owner_.ingress_generation_.notify_one();
         }
 
         startRead();

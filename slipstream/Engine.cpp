@@ -241,7 +241,7 @@ bool Engine::PushOutbound(
         .measure_tick_to_order = measure_tick_to_order,
     };
 
-    while (!egress.push(message)) {
+    while (!egress.push(message)) [[unlikely]] {
         if (!running.load(std::memory_order_acquire)) {
             return false;
         }

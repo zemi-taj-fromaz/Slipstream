@@ -59,7 +59,7 @@ StreamDecodeResult decodeStream(
     const std::span<const std::byte> input,
     std::vector<Message>& output,
     DecodeOne decode_one) {
-    if (!pending.Append(input)) {
+    if (!pending.Append(input)) [[unlikely]] {
         return {DecodeStatus::buffer_overflow, 0};
     }
 
