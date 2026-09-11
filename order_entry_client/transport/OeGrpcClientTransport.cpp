@@ -24,6 +24,24 @@ slipstream::grpc_api::Trade::Aggressor ToGrpcAggressor(
     return slipstream::grpc_api::Trade::AGGRESSOR_UNKNOWN;
 }
 
+const char* RejectReasonName(
+    const slipstream::grpc_api::ExecReport::RejectReason reason) noexcept {
+    switch (reason) {
+    case slipstream::grpc_api::ExecReport::NONE:
+        return "none";
+    case slipstream::grpc_api::ExecReport::RISK:
+        return "risk";
+    case slipstream::grpc_api::ExecReport::PRICE:
+        return "price";
+    case slipstream::grpc_api::ExecReport::SIZE:
+        return "size";
+    case slipstream::grpc_api::ExecReport::THROTTLE:
+        return "throttle";
+    default:
+        return "unknown";
+    }
+}
+
 }
 
 OeGrpcClientTransport::OeGrpcClientTransport(
@@ -274,12 +292,13 @@ void OeGrpcClientTransport::HandleInbound() {
     case slipstream::grpc_api::OeServerMessage::kExecReport: {
         const auto& value = inbound_.exec_report();
         logger_.info(
-            "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ts_ns={}",
+            "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ({}) ts_ns={}",
             value.client_order_id(),
             static_cast<unsigned>(value.status()),
             value.filled_qty(),
             value.avg_price(),
             static_cast<unsigned>(value.reason_code()),
+            RejectReasonName(value.reason_code()),
             value.ts_ns());
         break;
     }

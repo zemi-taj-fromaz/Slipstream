@@ -15,6 +15,24 @@ struct Overloaded : Visitors... {
     using Visitors::operator()...;
 };
 
+const char* RejectReasonName(
+    const slipstream::codec::RejectReason reason) noexcept {
+    switch (reason) {
+    case slipstream::codec::RejectReason::none:
+        return "none";
+    case slipstream::codec::RejectReason::risk:
+        return "risk";
+    case slipstream::codec::RejectReason::price:
+        return "price";
+    case slipstream::codec::RejectReason::size:
+        return "size";
+    case slipstream::codec::RejectReason::throttle:
+        return "throttle";
+    }
+
+    return "unknown";
+}
+
 }
 
 OeTcpClientTransport::OeTcpClientTransport(
@@ -198,12 +216,13 @@ void OeTcpClientTransport::HandleMessage(
             },
             [this](const slipstream::codec::ExecReportMessage& value) {
                 logger_.info(
-                    "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ts_ns={}",
+                    "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ({}) ts_ns={}",
                     value.client_order_id,
                     static_cast<unsigned>(value.status),
                     value.filled_qty,
                     value.avg_px,
                     static_cast<unsigned>(value.reason_code),
+                    RejectReasonName(value.reason_code),
                     value.ts_ns);
             },
             [this](const slipstream::codec::HeartbeatMessage& value) {
