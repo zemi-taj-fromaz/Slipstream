@@ -1,0 +1,20 @@
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run 2969568
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;Engine::PushOutbound 946431
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push 622225
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;VwapWindow::checkConstraints 523606
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;VwapWindow::insert 625685
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;VwapWindow::push 525425
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;VwapWindow::push;VwapWindow::checkConstraints 1295664
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;VwapWindow::push;VwapWindow::insert 227746
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;[slipstream] 1293332
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;TradeManager::Push;__divti3 4065774
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;VwapWindow::push 265792
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;[slipstream] 359431
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;sched_yield 987596
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;sched_yield;[unknown] 667647
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;std::__atomic_wait_address_v<unsigned long, std::__atomic_base<unsigned long>::wait 4718735
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;Engine::Run;syscall 4302100
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;TradeManager::Push 297679
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;slipstream::TcpPollServerTransport::NotifyOutboundReady 624906
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;std::_Function_handler<void  345773
+slip-engine;std::error_code::default_error_condition;std::thread::_State_impl<std::thread::_Invoker<std::tuple<main::{lambda;std::__atomic_wait_address_v<unsigned long, std::__atomic_base<unsigned long>::wait 919904
