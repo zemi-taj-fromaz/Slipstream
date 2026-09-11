@@ -33,6 +33,22 @@ const char* RejectReasonName(
     return "unknown";
 }
 
+const char* ExecStatusName(
+    const slipstream::codec::ExecStatus status) noexcept {
+    switch (status) {
+    case slipstream::codec::ExecStatus::ack:
+        return "ACK";
+    case slipstream::codec::ExecStatus::fill:
+        return "FILL";
+    case slipstream::codec::ExecStatus::partial:
+        return "PARTIAL";
+    case slipstream::codec::ExecStatus::reject:
+        return "REJECT";
+    }
+
+    return "UNKNOWN";
+}
+
 }
 
 OeTcpClientTransport::OeTcpClientTransport(
@@ -216,9 +232,10 @@ void OeTcpClientTransport::HandleMessage(
             },
             [this](const slipstream::codec::ExecReportMessage& value) {
                 logger_.info(
-                    "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ({}) ts_ns={}",
+                    "ExecReport client_order_id={} status={} ({}) filled_qty={} avg_px={} reason_code={} ({}) ts_ns={}",
                     value.client_order_id,
                     static_cast<unsigned>(value.status),
+                    ExecStatusName(value.status),
                     value.filled_qty,
                     value.avg_px,
                     static_cast<unsigned>(value.reason_code),

@@ -34,8 +34,7 @@ target_link_libraries(slipstream
 target_compile_definitions(slipstream
     PRIVATE
         SLIPSTREAM_VERIFICATION_DIR="${PROJECT_BINARY_DIR}/verification"
-        SLIPSTREAM_EXECUTION_REPORT_PATH="${PROJECT_BINARY_DIR}/slipstream_execution_report.log"
-        SLIPSTREAM_TICK_TO_ORDER_HISTOGRAM_PATH="${PROJECT_BINARY_DIR}/tick_to_order_histogram.csv"
+        SLIPSTREAM_BENCHMARK_OUTPUT_DIR="${PROJECT_BINARY_DIR}"
 )
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

@@ -20,6 +20,7 @@ struct EncodedFrame {
     std::size_t size{};
     std::size_t sent{};
     std::uint64_t trigger_received_at_ns{};
+    std::int64_t trade_id{};
     bool measure_tick_to_order{};
     std::array<std::byte, capacity> bytes{};
 

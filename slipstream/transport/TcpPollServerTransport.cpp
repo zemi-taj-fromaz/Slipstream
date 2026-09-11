@@ -336,6 +336,7 @@ void TcpPollServerTransport::drainEgress() {
         EncodedFrame frame{};
         frame.trigger_received_at_ns =
             outbound.trigger_received_at_ns;
+        frame.trade_id = outbound.trade_id;
         frame.measure_tick_to_order =
             outbound.measure_tick_to_order;
 
@@ -377,7 +378,9 @@ void TcpPollServerTransport::flushSendQueue(
         if (frame.measure_tick_to_order) {
             if (send_started_at_ns >= frame.trigger_received_at_ns) {
                 tick_to_order_histogram.Record(
-                    send_started_at_ns - frame.trigger_received_at_ns);
+                    frame.trigger_received_at_ns,
+                    send_started_at_ns,
+                    frame.trade_id);
             }
         }
 

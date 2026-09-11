@@ -42,6 +42,22 @@ const char* RejectReasonName(
     }
 }
 
+const char* ExecStatusName(
+    const slipstream::grpc_api::ExecReport::Status status) noexcept {
+    switch (status) {
+    case slipstream::grpc_api::ExecReport::ACK:
+        return "ACK";
+    case slipstream::grpc_api::ExecReport::FILL:
+        return "FILL";
+    case slipstream::grpc_api::ExecReport::PARTIAL:
+        return "PARTIAL";
+    case slipstream::grpc_api::ExecReport::REJECT:
+        return "REJECT";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 }
 
 OeGrpcClientTransport::OeGrpcClientTransport(
@@ -292,9 +308,10 @@ void OeGrpcClientTransport::HandleInbound() {
     case slipstream::grpc_api::OeServerMessage::kExecReport: {
         const auto& value = inbound_.exec_report();
         logger_.info(
-            "ExecReport client_order_id={} status={} filled_qty={} avg_px={} reason_code={} ({}) ts_ns={}",
+            "ExecReport client_order_id={} status={} ({}) filled_qty={} avg_px={} reason_code={} ({}) ts_ns={}",
             value.client_order_id(),
             static_cast<unsigned>(value.status()),
+            ExecStatusName(value.status()),
             value.filled_qty(),
             value.avg_price(),
             static_cast<unsigned>(value.reason_code()),

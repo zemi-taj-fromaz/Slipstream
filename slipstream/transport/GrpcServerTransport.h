@@ -70,6 +70,7 @@ private:
     void recordTickToOrder(
         std::uint64_t trigger_received_at_ns,
         std::uint64_t send_started_at_ns,
+        std::int64_t trade_id,
         bool measure_tick_to_order) noexcept;
 
     const SlipstreamConfig& config_;

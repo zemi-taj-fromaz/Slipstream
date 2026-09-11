@@ -250,6 +250,7 @@ public:
         grpc_api::OeServerMessage message;
         std::uint64_t trigger_received_at_ns{};
         std::uint64_t send_started_at_ns{};
+        std::int64_t trade_id{};
         bool measure_tick_to_order{};
         bool close_after_write{};
     };
@@ -409,6 +410,7 @@ private:
         owner_.recordTickToOrder(
             current_write_.trigger_received_at_ns,
             current_write_.send_started_at_ns,
+            current_write_.trade_id,
             current_write_.measure_tick_to_order);
 
         if (current_write_.close_after_write) {
@@ -623,6 +625,7 @@ void GrpcServerTransport::drainEgress() {
         oe_connection_->Enqueue(OeConnection::PendingWrite{
             .message = ToGrpcMessage(outbound.message),
             .trigger_received_at_ns = outbound.trigger_received_at_ns,
+            .trade_id = outbound.trade_id,
             .measure_tick_to_order = outbound.measure_tick_to_order,
             .close_after_write = false,
         });
@@ -725,6 +728,7 @@ void GrpcServerTransport::queueHeartbeat() {
 void GrpcServerTransport::recordTickToOrder(
     const std::uint64_t trigger_received_at_ns,
     const std::uint64_t send_started_at_ns,
+    const std::int64_t trade_id,
     const bool measure_tick_to_order) noexcept {
     if (!measure_tick_to_order) {
         return;
@@ -732,7 +736,9 @@ void GrpcServerTransport::recordTickToOrder(
 
     if (send_started_at_ns >= trigger_received_at_ns) {
         tick_to_order_histogram_.Record(
-            send_started_at_ns - trigger_received_at_ns);
+            trigger_received_at_ns,
+            send_started_at_ns,
+            trade_id);
     }
 }
 

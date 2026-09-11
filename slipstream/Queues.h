@@ -20,6 +20,7 @@ struct InboundEvent {
 struct OutboundMessage {
     codec::OrderEntryClientMessage message{};
     std::uint64_t trigger_received_at_ns{};
+    std::int64_t trade_id{};
     bool measure_tick_to_order{};
 };
 

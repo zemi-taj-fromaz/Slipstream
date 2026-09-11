@@ -18,20 +18,36 @@ struct TickToOrderStatistics {
     std::uint64_t overflow_count{};
 };
 
+struct TickToOrderSample {
+    std::uint64_t received_ns{};
+    std::uint64_t send_started_ns{};
+    std::int64_t trade_id{};
+};
+
 class TickToOrderHistogram {
 public:
-    static constexpr std::uint64_t bucket_width_ns = 1'000;
-    static constexpr std::size_t bucket_count = 5'000;
+    static constexpr std::uint64_t bucket_width_ns = 1'000'000;
+    static constexpr std::size_t bucket_count = 5;
+    static constexpr std::size_t raw_sample_capacity = 2'048;
 
     void Record(std::uint64_t latency_ns) noexcept;
+    void Record(
+        std::uint64_t received_ns,
+        std::uint64_t send_started_ns,
+        std::int64_t trade_id) noexcept;
 
     [[nodiscard]]
     TickToOrderStatistics GetStatistics() const noexcept;
 
-    void WriteCsv(std::ostream& output) const;
+    void WriteRawCsv(std::ostream& output) const;
 
 private:
+    void RecordHistogram(std::uint64_t latency_ns) noexcept;
+    void RecordRaw(TickToOrderSample sample) noexcept;
+
     std::array<std::uint32_t, bucket_count> buckets_{};
+    std::array<TickToOrderSample, raw_sample_capacity> raw_samples_{};
+    std::size_t raw_sample_count_{};
     std::uint64_t overflow_count_{};
     std::uint64_t sample_count_{};
 };

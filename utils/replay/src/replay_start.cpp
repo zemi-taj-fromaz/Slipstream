@@ -41,13 +41,19 @@ ReplayClientOptions ParseReplayClientOptions(
     bool has_port = false;
     bool has_start = false;
 
-    for (int index = 1; index < argc; index += 2) {
+    for (int index = 1; index < argc;) {
+        const std::string_view option{argv[index]};
+        if (option == "--benchmark") {
+            options.benchmark = true;
+            ++index;
+            continue;
+        }
+
         if (index + 1 >= argc) {
             throw std::invalid_argument(
                 "client option is missing its value");
         }
 
-        const std::string_view option{argv[index]};
         const std::string_view value{argv[index + 1]};
 
         if (option == "--host") {
@@ -105,6 +111,8 @@ ReplayClientOptions ParseReplayClientOptions(
             throw std::invalid_argument(
                 "unknown client option: " + std::string{option});
         }
+
+        index += 2;
     }
 
     if (!has_host || !has_port || !has_start) {
@@ -112,6 +120,7 @@ ReplayClientOptions ParseReplayClientOptions(
             "usage: " + std::string{argv[0]} +
             " --host <IPv4-address> --port <port> "
             "--start-at-ns <unix-nanoseconds> "
+            "[--benchmark] "
             "[--cpu <logical-cpu>] "
             "[--transport tcp|grpc|udp-multicast] "
             "[--md-a-group <IPv4-multicast-address>] "

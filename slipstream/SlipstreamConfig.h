@@ -28,6 +28,7 @@ struct SlipstreamConfig {
     std::uint16_t oe_port{14'300};
 
     std::string transport{"tcp"};
+    bool benchmark{false};
     unsigned main_cpu{0};
     unsigned network_cpu{2};
     unsigned engine_cpu{3};

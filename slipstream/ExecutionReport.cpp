@@ -34,6 +34,16 @@ std::string FormatPrice(const std::int64_t price) {
 }
 
 void TickToOrderHistogram::Record(const std::uint64_t latency_ns) noexcept {
+    RecordHistogram(latency_ns);
+    RecordRaw({
+        .received_ns = 0,
+        .send_started_ns = latency_ns,
+        .trade_id = 0,
+    });
+}
+
+void TickToOrderHistogram::RecordHistogram(
+    const std::uint64_t latency_ns) noexcept {
     const std::size_t bucket = static_cast<std::size_t>(
         latency_ns / bucket_width_ns);
     ++sample_count_;
@@ -46,52 +56,74 @@ void TickToOrderHistogram::Record(const std::uint64_t latency_ns) noexcept {
     ++buckets_[bucket];
 }
 
+void TickToOrderHistogram::RecordRaw(
+    const TickToOrderSample sample) noexcept {
+    if (raw_sample_count_ == raw_samples_.size()) {
+        return;
+    }
+    raw_samples_[raw_sample_count_++] = sample;
+}
+
+void TickToOrderHistogram::Record(
+    const std::uint64_t received_ns,
+    const std::uint64_t send_started_ns,
+    const std::int64_t trade_id) noexcept {
+    if (send_started_ns < received_ns) {
+        return;
+    }
+
+    RecordHistogram(send_started_ns - received_ns);
+    RecordRaw({
+        .received_ns = received_ns,
+        .send_started_ns = send_started_ns,
+        .trade_id = trade_id,
+    });
+}
+
 TickToOrderStatistics
 TickToOrderHistogram::GetStatistics() const noexcept {
-    if (sample_count_ == 0) {
+    if (raw_sample_count_ == 0) {
         return {};
     }
 
-    const auto percentile = [this](
+    std::array<std::uint64_t, raw_sample_capacity> latencies{};
+    for (std::size_t index = 0; index < raw_sample_count_; ++index) {
+        latencies[index] =
+            raw_samples_[index].send_started_ns -
+            raw_samples_[index].received_ns;
+    }
+    std::sort(
+        latencies.begin(),
+        latencies.begin() + static_cast<std::ptrdiff_t>(raw_sample_count_));
+
+    const auto percentile = [&latencies, this](
         const std::uint64_t numerator,
         const std::uint64_t denominator) {
         const std::uint64_t rank =
-            (sample_count_ * numerator + denominator - 1) /
+            (raw_sample_count_ * numerator + denominator - 1) /
             denominator;
-        std::uint64_t cumulative{};
-
-        for (std::size_t bucket = 0; bucket < buckets_.size(); ++bucket) {
-            cumulative += buckets_[bucket];
-            if (cumulative >= rank) {
-                return static_cast<std::uint64_t>(bucket) *
-                       bucket_width_ns;
-            }
-        }
-
-        return static_cast<std::uint64_t>(bucket_count) *
-               bucket_width_ns;
+        return latencies[static_cast<std::size_t>(rank - 1)];
     };
 
     return {
         .p50_ns = percentile(50, 100),
         .p99_ns = percentile(99, 100),
         .p999_ns = percentile(999, 1'000),
-        .sample_count = static_cast<std::size_t>(sample_count_),
+        .sample_count = raw_sample_count_,
         .overflow_count = overflow_count_,
     };
 }
 
-void TickToOrderHistogram::WriteCsv(std::ostream& output) const {
-    output << "bucket_lower_us,bucket_upper_us,count,overflow\n";
-    for (std::size_t bucket = 0; bucket < buckets_.size(); ++bucket) {
+void TickToOrderHistogram::WriteRawCsv(std::ostream& output) const {
+    output << "trade_id,received_ns,send_started_ns,tto_ns\n";
+    for (std::size_t index = 0; index < raw_sample_count_; ++index) {
+        const TickToOrderSample& sample = raw_samples_[index];
         output
-            << bucket << ','
-            << bucket + 1 << ','
-            << buckets_[bucket] << ",false\n";
+            << sample.trade_id << ','
+            << sample.received_ns << ','
+            << sample.send_started_ns << ','
+            << sample.send_started_ns - sample.received_ns << '\n';
     }
-    output
-        << bucket_count << ",," << overflow_count_
-        << ",true\n";
 }
 
 TickToOrderStatistics CalculateTickToOrderStatistics(

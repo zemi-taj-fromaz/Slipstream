@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <spdlog/logger.h>
+#include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
@@ -36,6 +37,10 @@ int main(int argc, char* argv[]) {
     try {
         const utils::ReplayClientOptions options =
             utils::ParseReplayClientOptions(argc, argv, 5);
+        if (options.benchmark) {
+            logger.set_level(spdlog::level::off);
+            spdlog::set_level(spdlog::level::off);
+        }
         utils::ConfigureCurrentThread("slip-oe-client", options.cpu);
         const auto events = parse_csv(csv_path);
         logger.info("Parsed {} market event rows from {}", events.size(), csv_path);

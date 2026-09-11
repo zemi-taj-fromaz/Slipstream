@@ -133,7 +133,7 @@ void Engine::Run() {
                     "user trade decision has unknown side");
             }
 
-            if (rejected) {
+            if (rejected && !config_.benchmark) {
                 std::cout
                     << "[slipstream] Rejecting NewOrder reason="
                     << TradeRejectionReason(result)
@@ -235,9 +235,12 @@ bool Engine::PushOutbound(
     const slipstream::codec::OrderEntryClientMessage& outbound,
     const std::uint64_t trigger_received_at_ns,
     const bool measure_tick_to_order) {
+    const auto* order =
+        std::get_if<slipstream::codec::NewOrderMessage>(&outbound);
     const slipstream::OutboundMessage message{
         .message = outbound,
         .trigger_received_at_ns = trigger_received_at_ns,
+        .trade_id = order == nullptr ? 0 : order->trade_id,
         .measure_tick_to_order = measure_tick_to_order,
     };
 

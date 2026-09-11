@@ -58,26 +58,22 @@ TEST(ExecutionReport, AggregatesTickToOrderHistogram) {
 
     const TickToOrderStatistics statistics = histogram.GetStatistics();
 
-    EXPECT_EQ(statistics.p50_ns, 1'000U);
-    EXPECT_EQ(statistics.p99_ns, 5'000'000U);
-    EXPECT_EQ(statistics.p999_ns, 5'000'000U);
+    EXPECT_EQ(statistics.p50_ns, 1'500U);
+    EXPECT_EQ(statistics.p99_ns, 6'000'000U);
+    EXPECT_EQ(statistics.p999_ns, 6'000'000U);
     EXPECT_EQ(statistics.sample_count, 4U);
     EXPECT_EQ(statistics.overflow_count, 1U);
 }
 
-TEST(ExecutionReport, WritesTickToOrderHistogramCsv) {
+TEST(ExecutionReport, WritesRawTickToOrderCsv) {
     TickToOrderHistogram histogram;
-    histogram.Record(1'500);
-    histogram.Record(6'000'000);
+    histogram.Record(1'000, 1'375, 42);
 
     std::ostringstream output;
-    histogram.WriteCsv(output);
+    histogram.WriteRawCsv(output);
 
     EXPECT_NE(
-        output.str().find("1,2,1,false"),
-        std::string::npos);
-    EXPECT_NE(
-        output.str().find("5000,,1,true"),
+        output.str().find("42,1000,1375,375"),
         std::string::npos);
 }
 

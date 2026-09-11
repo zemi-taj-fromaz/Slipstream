@@ -11,6 +11,7 @@ md_port="9001"
 oe_host="127.0.0.1"
 oe_port="9002"
 transport="tcp"
+benchmark="false"
 md_a_group="239.255.0.1"
 md_a_port="14200"
 md_b_group="239.255.0.2"
@@ -48,6 +49,10 @@ while (($# > 0)); do
         --transport)
             transport="$2"
             shift 2
+            ;;
+        --benchmark)
+            benchmark="true"
+            shift
             ;;
         --md-a-group)
             md_a_group="$2"
@@ -112,6 +117,12 @@ server_args+=(
     --engine-cpu "${engine_cpu}"
 )
 
+client_benchmark_args=()
+if [[ "${benchmark}" == "true" ]]; then
+    server_args+=(--benchmark)
+    client_benchmark_args+=(--benchmark)
+fi
+
 server="${build_dir}/slipstream/slipstream"
 md_client="${build_dir}/market_data_client/market_data_client"
 oe_client="${build_dir}/order_entry_client/order_entry_client"
@@ -153,7 +164,9 @@ fi
 now_ns="$(date +%s%N)"
 start_at_ns=$((now_ns + start_delay_seconds * 1000000000))
 
-echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
+if [[ "${benchmark}" != "true" ]]; then
+    echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
+fi
 
 "${md_client}" \
     --host "${md_host}" \
@@ -165,6 +178,7 @@ echo "[launcher] Replay starts at Unix nanoseconds: ${start_at_ns}"
     --md-b-port "${md_b_port}" \
     --md-multicast-interface "${md_multicast_interface}" \
     --cpu "${md_client_cpu}" \
+    "${client_benchmark_args[@]}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 
@@ -178,6 +192,7 @@ fi
     --port "${oe_port}" \
     --transport "${oe_transport}" \
     --cpu "${oe_client_cpu}" \
+    "${client_benchmark_args[@]}" \
     --start-at-ns "${start_at_ns}" &
 pids+=("$!")
 

@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 #include <spdlog/logger.h>
+#include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
@@ -140,6 +141,9 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
         } else if (option == "--transport") {
             config.transport = NextValue();
 
+        } else if (option == "--benchmark") {
+            config.benchmark = true;
+
         } else if (option == "--main-cpu") {
             config.main_cpu =
                 ParseNumber<unsigned>(NextValue(), option);
@@ -181,6 +185,10 @@ int main(int argc, char* argv[]) {
 
     try {
         const SlipstreamConfig slipstream_config = ParseSlipstreamConfig(argc, argv);
+        if (slipstream_config.benchmark) {
+            logger.set_level(spdlog::level::off);
+            spdlog::set_level(spdlog::level::off);
+        }
         utils::ConfigureCurrentThread(
             "slip-main",
             slipstream_config.main_cpu);
@@ -269,8 +277,18 @@ int main(int argc, char* argv[]) {
             execution_report,
             slipstream_config);
 
+        const std::string_view order_transport =
+            slipstream_config.transport == "grpc"
+                ? "grpc"
+                : "tcp";
+        const std::string benchmark_output_dir{
+            SLIPSTREAM_BENCHMARK_OUTPUT_DIR};
+        const std::string report_path =
+            benchmark_output_dir +
+            "/execution_report_" +
+            std::string{order_transport} + ".log";
         std::ofstream report_file{
-            SLIPSTREAM_EXECUTION_REPORT_PATH,
+            report_path,
             std::ios::trunc};
         if (!report_file) {
             throw std::runtime_error(
@@ -283,28 +301,29 @@ int main(int argc, char* argv[]) {
                 "failed to write execution report file");
         }
 
-        std::ofstream histogram_file{
-            SLIPSTREAM_TICK_TO_ORDER_HISTOGRAM_PATH,
-            std::ios::trunc};
-        if (!histogram_file) {
-            throw std::runtime_error(
-                "failed to open tick-to-order histogram file");
-        }
+        if (slipstream_config.benchmark) {
+            const std::string raw_tto_path =
+                benchmark_output_dir +
+                "/tick_to_order_raw_" +
+                std::string{order_transport} + ".csv";
+            std::ofstream raw_tto_file{raw_tto_path, std::ios::trunc};
+            if (!raw_tto_file) {
+                throw std::runtime_error(
+                    "failed to open raw tick-to-order CSV");
+            }
 
-        server_transport->GetTickToOrderHistogram().WriteCsv(histogram_file);
-        if (!histogram_file) {
-            throw std::runtime_error(
-                "failed to write tick-to-order histogram file");
+            server_transport->GetTickToOrderHistogram().WriteRawCsv(
+                raw_tto_file);
+            if (!raw_tto_file) {
+                throw std::runtime_error(
+                    "failed to write raw tick-to-order CSV");
+            }
         }
 
         std::cout << report << std::flush;
         logger.info(
             "Execution report written to {}",
-            SLIPSTREAM_EXECUTION_REPORT_PATH);
-        logger.info(
-            "Tick-to-order histogram written to {}",
-            SLIPSTREAM_TICK_TO_ORDER_HISTOGRAM_PATH);
-
+            report_path);
         return 0;
     } catch (const std::exception& error) {
         logger.error("Slipstream failed: {}", error.what());
