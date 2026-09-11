@@ -21,7 +21,7 @@ def parse_arguments():
         type=Path,
         default=Path("build-linux/tick_to_order_grpc.png"),
     )
-    parser.add_argument("--bucket-us", type=float, default=1_000.0)
+    parser.add_argument("--bucket-us", type=float, default=1.0)
     parser.add_argument("--max-us", type=float)
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()

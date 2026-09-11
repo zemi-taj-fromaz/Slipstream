@@ -3,4 +3,6 @@
 build-linux/
 build-grpc/
 build-profile/
+build-profile-native/
+build-benchmark-native/
 Dockerfile.dev
