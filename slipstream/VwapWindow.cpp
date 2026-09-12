@@ -67,6 +67,10 @@ VwapWindow::VwapWindow(const SlipstreamConfig& slipstream)
 }
 
 TradeDecision VwapWindow::push(TradePrint trade_print) {
+    if (trade_print.origin == TradeOrigin::User) {
+        last_user_trade = trade_print;
+    }
+
     evictExpired(trade_print.ts_ns);
 
     const TradeDecision decision = checkConstraints(trade_print);
@@ -78,6 +82,18 @@ TradeDecision VwapWindow::push(TradePrint trade_print) {
     insert(trade_print);
     recomputeMetrics();
     return decision;
+}
+
+TradeDecision VwapWindow::probe(const std::uint64_t now_ns) {
+    evictExpired(now_ns);
+
+    if (!last_user_trade) {
+        return {};
+    }
+
+    TradePrint trade_print = *last_user_trade;
+    trade_print.ts_ns = now_ns;
+    return checkConstraints(trade_print);
 }
 
 TradeDecision VwapWindow::checkConstraints(TradePrint& trade_print) {

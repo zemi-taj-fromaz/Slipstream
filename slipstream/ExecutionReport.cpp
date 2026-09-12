@@ -114,11 +114,13 @@ TickToOrderHistogram::GetStatistics() const noexcept {
     };
 }
 
-void TickToOrderHistogram::WriteRawCsv(std::ostream& output) const {
-    output << "trade_id,received_ns,send_started_ns,tto_ns\n";
+void TickToOrderHistogram::WriteRawCsv(
+    std::ostream& output, std::string_view transport, ExecutionMode mode) const {
+    output << "transport,execution_mode,trade_id,received_ns,send_started_ns,tto_ns\n";
     for (std::size_t index = 0; index < raw_sample_count_; ++index) {
         const TickToOrderSample& sample = raw_samples_[index];
         output
+            << transport << ',' << ExecutionModeName(mode) << ','
             << sample.trade_id << ','
             << sample.received_ns << ','
             << sample.send_started_ns << ','
@@ -203,6 +205,10 @@ std::string FormatExecutionReport(
 
     std::ostringstream output;
     output << "=== SLIPSTREAM EXECUTION REPORT ===\n";
+    output << std::left << std::setw(20) << "execution mode"
+           << ExecutionModeName(config.execution_mode) << '\n';
+    output << std::left << std::setw(20) << "transport"
+           << config.transport << '\n';
     output << std::left << std::setw(20) << "symbol"
            << config.symbol << '\n';
     output << std::left << std::setw(20) << "market qty"

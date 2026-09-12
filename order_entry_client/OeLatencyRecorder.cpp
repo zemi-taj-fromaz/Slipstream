@@ -13,9 +13,11 @@ constexpr std::size_t expected_order_count = 5'000;
 
 OeLatencyRecorder::OeLatencyRecorder(
     std::string transport,
-    std::string output_path)
+    std::string output_path,
+    std::string execution_mode)
     : transport_{std::move(transport)},
-      output_path_{std::move(output_path)} {
+      output_path_{std::move(output_path)},
+      execution_mode_{std::move(execution_mode)} {
     pending_sends_.reserve(expected_order_count);
     samples_.reserve(expected_order_count);
 }
@@ -55,10 +57,11 @@ void OeLatencyRecorder::WriteCsv() const {
         throw std::runtime_error("failed to open OE latency CSV");
     }
 
-    output << "transport,trade_id,status,send_ns,receive_ns,latency_ns\n";
+    output << "transport,execution_mode,trade_id,status,send_ns,receive_ns,latency_ns\n";
     for (const Sample& sample : samples_) {
         output
             << transport_ << ','
+            << execution_mode_ << ','
             << sample.trade_id << ','
             << sample.status << ','
             << sample.send_ns << ','

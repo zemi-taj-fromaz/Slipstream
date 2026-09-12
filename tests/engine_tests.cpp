@@ -44,8 +44,11 @@ MarketEvent MakeTrade() {
     return event;
 }
 
-TEST(Engine, ProcessesIngressAndProducesOrderLifecycle) {
+class EngineModes : public ::testing::TestWithParam<ExecutionMode> {};
+
+TEST_P(EngineModes, ProcessesIngressAndProducesOrderLifecycle) {
     SlipstreamConfig config{};
+    config.execution_mode = GetParam();
     config.vwap_window_ms = 1'000;
     config.max_quantity = 500;
     config.participation_cap = 1.0;
@@ -140,6 +143,56 @@ TEST(Engine, ProcessesIngressAndProducesOrderLifecycle) {
     EXPECT_EQ(report.buy_qty, 100U);
     EXPECT_EQ(report.sell_qty, 0U);
     EXPECT_GE(notifications.load(std::memory_order_relaxed), 1U);
+}
+
+TEST_P(EngineModes, AcceptsNotificationAfterDrainingIngressAndStopsWhenIdle) {
+    SlipstreamConfig config{};
+    config.execution_mode = GetParam();
+    config.vwap_window_ms = 1'000;
+    config.participation_cap = 1.0;
+    config.band_bps = 0.0;
+    slipstream::MarketEventQueue ingress;
+    slipstream::OrderEntryQueue egress;
+    std::atomic<std::uint64_t> generation{0};
+    Engine engine{config, ingress, egress, generation, [] {}};
+    ASSERT_TRUE(ingress.push({.message = MakeQuote(0, 1'000'000), .received_at_ns = 1}));
+    for (std::uint64_t index = 0; index < 12; ++index) {
+        ASSERT_TRUE(ingress.push({
+            .message = MakeQuote(index == 0 ? 0 : 1'000'000'000ULL,
+                1'000'100 + static_cast<std::int64_t>(index) * 100),
+            .received_at_ns = index + 2,
+        }));
+    }
+    std::jthread worker{[&] { engine.Run(); }};
+
+    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    const slipstream::InboundEvent inbound{.message = MakeTrade(), .received_at_ns = 123};
+    const bool pushed = ingress.push(inbound);
+    generation.fetch_add(1, std::memory_order_release);
+    generation.notify_one();
+
+    slipstream::OutboundMessage message{};
+    bool received = false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+    while (!(received = egress.pop(message)) && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    engine.Stop();
+    worker.join();
+    EXPECT_TRUE(pushed);
+    ASSERT_TRUE(received);
+    EXPECT_TRUE(std::holds_alternative<slipstream::codec::NewOrderMessage>(message.message));
+}
+
+INSTANTIATE_TEST_SUITE_P(AllPolicies, EngineModes, ::testing::Values(
+    ExecutionMode::Wait, ExecutionMode::Spin, ExecutionMode::Probe));
+
+TEST(ExecutionMode, ParsesNamesAndRejectsUnknownMode) {
+    for (auto mode : {ExecutionMode::Wait, ExecutionMode::Spin, ExecutionMode::Probe}) {
+        EXPECT_EQ(ParseExecutionMode(ExecutionModeName(mode)), mode);
+    }
+    EXPECT_EQ(SlipstreamConfig{}.execution_mode, ExecutionMode::Wait);
+    EXPECT_THROW(static_cast<void>(ParseExecutionMode("typo")), std::invalid_argument);
 }
 
 } // namespace

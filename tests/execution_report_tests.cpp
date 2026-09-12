@@ -70,7 +70,10 @@ TEST(ExecutionReport, WritesRawTickToOrderCsv) {
     histogram.Record(1'000, 1'375, 42);
 
     std::ostringstream output;
-    histogram.WriteRawCsv(output);
+    histogram.WriteRawCsv(output, "tcp", ExecutionMode::Probe);
+
+    EXPECT_NE(output.str().find("transport,execution_mode,trade_id"), std::string::npos);
+    EXPECT_NE(output.str().find("tcp,engine_probe,42,1000,1375,375"), std::string::npos);
 
     EXPECT_NE(
         output.str().find("42,1000,1375,375"),

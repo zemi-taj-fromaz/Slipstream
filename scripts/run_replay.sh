@@ -11,6 +11,7 @@ md_port="9001"
 oe_host="127.0.0.1"
 oe_port="9002"
 transport="tcp"
+execution_mode="engine_wait"
 benchmark="false"
 md_a_group="239.255.0.1"
 md_a_port="14200"
@@ -19,9 +20,9 @@ md_b_port="14201"
 md_multicast_interface="0.0.0.0"
 main_cpu="0"
 network_cpu="2"
-engine_cpu="3"
+engine_cpu="5"
 md_client_cpu="4"
-oe_client_cpu="5"
+oe_client_cpu="6"
 server_args=()
 
 while (($# > 0)); do
@@ -48,6 +49,10 @@ while (($# > 0)); do
             ;;
         --transport)
             transport="$2"
+            shift 2
+            ;;
+        --execution-mode)
+            execution_mode="${2:?--execution-mode requires a value}"
             shift 2
             ;;
         --benchmark)
@@ -101,7 +106,13 @@ while (($# > 0)); do
     esac
 done
 
+case "${execution_mode}" in
+    engine_wait|engine_spin|engine_probe) ;;
+    *) echo "[launcher] invalid execution mode: ${execution_mode}" >&2; exit 1 ;;
+esac
+
 server_args+=(
+    --execution-mode "${execution_mode}"
     --md-host "${md_host}"
     --md-port "${md_port}"
     --oe-host "${oe_host}"
@@ -188,6 +199,7 @@ if [[ "${transport}" == "udp-multicast" ]]; then
 fi
 
 "${oe_client}" \
+    --execution-mode "${execution_mode}" \
     --host "${oe_host}" \
     --port "${oe_port}" \
     --transport "${oe_transport}" \

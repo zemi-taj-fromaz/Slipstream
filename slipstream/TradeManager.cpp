@@ -124,3 +124,7 @@ TradeManagerResult TradeManager::Push(const MarketEvent& event) {
 
     return MarketUpdateResult{};
 }
+
+TradeDecision TradeManager::Probe(const std::uint64_t now_ns) {
+    return vwap_window.probe(now_ns);
+}

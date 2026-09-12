@@ -13,19 +13,18 @@ def parse_arguments():
     parser.add_argument(
         "--tcp",
         type=Path,
-        default=Path("build-linux/oe_latency_tcp.csv"),
     )
     parser.add_argument(
         "--grpc",
         type=Path,
-        default=Path("build-linux/oe_latency_grpc.csv"),
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("build-linux/oe_latency_tcp_vs_grpc.png"),
     )
     parser.add_argument("--bins", type=int, default=50)
+    parser.add_argument("--execution-mode", choices=["engine_wait", "engine_spin", "engine_probe"],
+                        default="engine_wait")
     parser.add_argument("--max-us", type=float)
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()
@@ -53,6 +52,13 @@ def percentile_text(values):
 
 def main():
     arguments = parse_arguments()
+    if arguments.tcp is None:
+        arguments.tcp = Path(f"build-linux/oe_latency_tcp_{arguments.execution_mode}.csv")
+    if arguments.grpc is None:
+        arguments.grpc = Path(f"build-linux/oe_latency_grpc_{arguments.execution_mode}.csv")
+    if arguments.output is None:
+        arguments.output = arguments.tcp.with_name(
+            f"{arguments.tcp.stem}_vs_{arguments.grpc.stem}.png")
     if arguments.bins <= 0:
         raise ValueError("--bins must be greater than zero")
 

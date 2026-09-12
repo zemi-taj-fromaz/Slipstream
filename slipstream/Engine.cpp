@@ -5,6 +5,7 @@
 #include "Engine.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #if defined(__x86_64__) || defined(__i386__)
 #include <immintrin.h>
@@ -25,6 +26,10 @@ inline void CpuRelax() noexcept {
 #else
 #error "CpuRelax is not implemented for this architecture"
 #endif
+}
+
+inline void DoNotOptimize(const TradeDecision& decision) noexcept {
+    asm volatile("" : : "g"(&decision) : "memory");
 }
 
 std::string SymbolText(const char* symbol, const std::size_t size) {
@@ -63,32 +68,48 @@ Engine::Engine(const SlipstreamConfig& slipstream,
       notify_egress(std::move(egress_notifier)) {}
 
 void Engine::Run() {
-    while (running.load(std::memory_order_relaxed)) {
-        slipstream::InboundEvent inbound{};
-        if (!ingress.pop(inbound)) {
-            const std::uint64_t observed = ingress_generation.load(
-                std::memory_order_acquire);
+    std::uint64_t last_market_timestamp{};
+    std::chrono::steady_clock::time_point last_steady_timestamp{};
+    bool timestamp_initialized{false};
 
-            if (!ingress.pop(inbound)) {
-                if (running.load(std::memory_order_acquire)) {
-                    ingress_generation.wait(
-                        observed,
-                        std::memory_order_acquire);
+    while (running.load(std::memory_order_relaxed)) {
+        const auto generation = config_.execution_mode == ExecutionMode::Wait
+            ? ingress_generation.load(std::memory_order_acquire) : 0;
+        slipstream::InboundEvent inbound{};
+        const bool new_data = ingress.pop(inbound);
+
+        if (!new_data) [[likely]] {
+            if (config_.execution_mode == ExecutionMode::Wait) {
+                if (!running.load(std::memory_order_acquire)) {
+                    return;
                 }
-                continue;
+                ingress_generation.wait(generation, std::memory_order_acquire);
+            } else if (config_.execution_mode == ExecutionMode::Spin) {
+                CpuRelax();
+            } else if (timestamp_initialized) {
+                const auto now = std::chrono::steady_clock::now();
+                const auto elapsed = now - last_steady_timestamp;
+                const auto elapsed_ns = std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(elapsed).count();
+                const auto timestamp = last_market_timestamp + elapsed_ns;
+
+                DoNotOptimize(trade_manager.Probe(timestamp));
             }
+            continue;
         }
 
         const MarketEvent& event = inbound.message;
+        if (config_.execution_mode == ExecutionMode::Probe) {
+            last_market_timestamp = event.ts;
+            last_steady_timestamp = std::chrono::steady_clock::now();
+            timestamp_initialized = true;
+        }
 
         const TradeManagerResult manager_result = trade_manager.Push(event);
 
-        if (const auto* market =
-                std::get_if<MarketUpdateResult>(&manager_result)) {
-            execution_report_.market_qty +=
-                market->market_qty_delta;
-            execution_report_.market_pq_sum +=
-                market->market_pq_delta;
+        if (const auto* market = std::get_if<MarketUpdateResult>(&manager_result)) {
+            execution_report_.market_qty += market->market_qty_delta;
+            execution_report_.market_pq_sum += market->market_pq_delta;
             continue;
         }
 

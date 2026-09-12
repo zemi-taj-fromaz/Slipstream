@@ -64,6 +64,7 @@ private:
     utils::Socket<utils::SockType::Udp> session_control_listener{};
     const SlipstreamConfig& config_;
     std::atomic_bool alive{true};
+    int wake_fd{-1};
 
     MarketEventQueue* ingress{nullptr};
     OrderEntryQueue* egress{nullptr};
@@ -74,7 +75,6 @@ private:
 
     std::deque<EncodedFrame> send_queue;
     TickToOrderHistogram tick_to_order_histogram;
-    int wake_fd{-1};
 
     std::chrono::steady_clock::time_point last_oe_activity{};
     std::chrono::steady_clock::time_point next_heartbeat{};

@@ -7,6 +7,27 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <stdexcept>
+
+enum class ExecutionMode { Wait, Spin, Probe };
+
+[[nodiscard]] constexpr std::string_view ExecutionModeName(ExecutionMode mode) noexcept {
+    switch (mode) {
+        case ExecutionMode::Wait: return "engine_wait";
+        case ExecutionMode::Spin: return "engine_spin";
+        case ExecutionMode::Probe: return "engine_probe";
+    }
+    return "unknown";
+}
+
+[[nodiscard]] inline ExecutionMode ParseExecutionMode(std::string_view value) {
+    if (value == "engine_wait") return ExecutionMode::Wait;
+    if (value == "engine_spin") return ExecutionMode::Spin;
+    if (value == "engine_probe") return ExecutionMode::Probe;
+    throw std::invalid_argument(
+        "--execution-mode must be engine_wait, engine_spin, or engine_probe");
+}
 
 struct SlipstreamConfig {
     std::string symbol{"SYNTH1"};
@@ -28,10 +49,11 @@ struct SlipstreamConfig {
     std::uint16_t oe_port{14'300};
 
     std::string transport{"tcp"};
+    ExecutionMode execution_mode{ExecutionMode::Wait};
     bool benchmark{false};
     unsigned main_cpu{0};
     unsigned network_cpu{2};
-    unsigned engine_cpu{3};
+    unsigned engine_cpu{5};
 };
 
 [[nodiscard]]

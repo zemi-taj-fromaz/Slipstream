@@ -141,6 +141,9 @@ SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]) {
         } else if (option == "--transport") {
             config.transport = NextValue();
 
+        } else if (option == "--execution-mode") {
+            config.execution_mode = ParseExecutionMode(NextValue());
+
         } else if (option == "--benchmark") {
             config.benchmark = true;
 
@@ -283,10 +286,12 @@ int main(int argc, char* argv[]) {
                 : "tcp";
         const std::string benchmark_output_dir{
             SLIPSTREAM_BENCHMARK_OUTPUT_DIR};
+        const std::string output_suffix = std::string{order_transport} + "_" +
+            std::string{ExecutionModeName(slipstream_config.execution_mode)};
         const std::string report_path =
             benchmark_output_dir +
             "/execution_report_" +
-            std::string{order_transport} + ".log";
+            output_suffix + ".log";
         std::ofstream report_file{
             report_path,
             std::ios::trunc};
@@ -305,7 +310,7 @@ int main(int argc, char* argv[]) {
             const std::string raw_tto_path =
                 benchmark_output_dir +
                 "/tick_to_order_raw_" +
-                std::string{order_transport} + ".csv";
+                output_suffix + ".csv";
             std::ofstream raw_tto_file{raw_tto_path, std::ios::trunc};
             if (!raw_tto_file) {
                 throw std::runtime_error(
@@ -313,7 +318,7 @@ int main(int argc, char* argv[]) {
             }
 
             server_transport->GetTickToOrderHistogram().WriteRawCsv(
-                raw_tto_file);
+                raw_tto_file, order_transport, slipstream_config.execution_mode);
             if (!raw_tto_file) {
                 throw std::runtime_error(
                     "failed to write raw tick-to-order CSV");

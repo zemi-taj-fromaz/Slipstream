@@ -39,7 +39,8 @@ public:
     [[nodiscard]]
     TickToOrderStatistics GetStatistics() const noexcept;
 
-    void WriteRawCsv(std::ostream& output) const;
+    void WriteRawCsv(std::ostream& output, std::string_view transport = "tcp",
+                     ExecutionMode mode = ExecutionMode::Wait) const;
 
 private:
     void RecordHistogram(std::uint64_t latency_ns) noexcept;

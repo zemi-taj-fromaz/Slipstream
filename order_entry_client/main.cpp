@@ -52,7 +52,8 @@ int main(int argc, char* argv[]) {
         OeLatencyRecorder latency_recorder{
             oe_transport,
             std::string{SLIPSTREAM_OE_LATENCY_DIR} +
-                "/oe_latency_" + oe_transport + ".csv"};
+                "/oe_latency_" + oe_transport + "_" + options.execution_mode + ".csv",
+            options.execution_mode};
 
         const auto write_latency_csv = [&] {
             latency_recorder.WriteCsv();

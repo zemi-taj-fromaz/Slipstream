@@ -9,6 +9,7 @@ namespace utils {
 struct ReplayClientOptions {
     std::string host;
     std::string transport{"tcp"};
+    std::string execution_mode{"engine_wait"};
     std::uint16_t port;
     std::uint64_t start_at_ns;
     bool benchmark{false};

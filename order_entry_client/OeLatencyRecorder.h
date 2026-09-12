@@ -9,7 +9,8 @@
 
 class OeLatencyRecorder {
 public:
-    OeLatencyRecorder(std::string transport, std::string output_path);
+    OeLatencyRecorder(std::string transport, std::string output_path,
+                      std::string execution_mode = "engine_wait");
 
     void RecordSend(std::int64_t trade_id);
     void RecordConfirmation(std::int64_t trade_id, char status);
@@ -31,6 +32,7 @@ private:
 
     std::string transport_;
     std::string output_path_;
+    std::string execution_mode_;
     std::unordered_map<std::int64_t, std::uint64_t> pending_sends_;
     std::vector<Sample> samples_;
 };

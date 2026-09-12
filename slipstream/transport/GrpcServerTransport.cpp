@@ -232,8 +232,10 @@ private:
             throw std::runtime_error("failed to enqueue gRPC quote");
         }
 
-        owner_.ingress_generation_.fetch_add(1, std::memory_order_release);
-        owner_.ingress_generation_.notify_one();
+        if (owner_.config_.execution_mode == ExecutionMode::Wait) {
+            owner_.ingress_generation_.fetch_add(1, std::memory_order_release);
+            owner_.ingress_generation_.notify_one();
+        }
     }
 
     GrpcServerTransport& owner_;
@@ -372,10 +374,10 @@ private:
             if (!owner_.ingress_.push(inbound)) [[unlikely]] {
                 throw std::runtime_error("failed to enqueue gRPC trade");
             }
-            owner_.ingress_generation_.fetch_add(
-                1,
-                std::memory_order_release);
-            owner_.ingress_generation_.notify_one();
+            if (owner_.config_.execution_mode == ExecutionMode::Wait) {
+                owner_.ingress_generation_.fetch_add(1, std::memory_order_release);
+                owner_.ingress_generation_.notify_one();
+            }
         }
 
         startRead();
@@ -515,7 +517,9 @@ void GrpcServerTransport::Run() {
             const auto result = completion_queue_->AsyncNext(
                 &raw_tag,
                 &ok,
-                std::chrono::system_clock::now() + std::chrono::seconds{1});
+                std::chrono::system_clock::now() +
+                    (config_.execution_mode == ExecutionMode::Wait
+                        ? std::chrono::seconds{1} : std::chrono::seconds{0}));
 
             if (result == grpc::CompletionQueue::GOT_EVENT) {
                 dispatchCompletion(raw_tag, ok);
@@ -523,6 +527,10 @@ void GrpcServerTransport::Run() {
                 break;
             }
 
+            if (config_.execution_mode != ExecutionMode::Wait &&
+                !shutdown_requested_.load(std::memory_order_acquire)) {
+                drainEgress();
+            }
             drainSessionControl();
             checkHeartbeat();
 
@@ -551,6 +559,7 @@ void GrpcServerTransport::Stop() {
 }
 
 void GrpcServerTransport::NotifyOutboundReady() {
+    if (config_.execution_mode != ExecutionMode::Wait) return;
     if (outbound_wake_pending_.exchange(true, std::memory_order_acq_rel)) {
         return;
     }

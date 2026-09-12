@@ -8,15 +8,15 @@
 #include <cstring>
 #include <memory>
 #include <poll.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
 #include <span>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
-#include <sys/eventfd.h>
 #include <type_traits>
-#include <unistd.h>
 #include <utility>
 #include <variant>
 
@@ -35,15 +35,13 @@ std::uint64_t MonotonicNowNs() noexcept {
 
 TcpPollServerTransport::TcpPollServerTransport(
     const SlipstreamConfig& config)
-    : config_{config},
-      wake_fd{::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)} {
-    if (wake_fd == -1) {
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "eventfd() failed");
+    : config_{config} {
+    if (config_.execution_mode == ExecutionMode::Wait) {
+        wake_fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+        if (wake_fd == -1) {
+            throw std::system_error(errno, std::generic_category(), "eventfd() failed");
+        }
     }
-
 }
 
 TcpPollServerTransport::TcpPollServerTransport(
@@ -107,70 +105,56 @@ void TcpPollServerTransport::Run() {
 
     markOeActivity();
 
-    constexpr std::size_t md_index = 0;
     constexpr std::size_t oe_index = 1;
-    constexpr std::size_t wake_index = 2;
-    constexpr std::size_t session_control_index = 3;
-
+    constexpr std::size_t wake_index = 3;
     std::array<pollfd, 4> poll_fds{{
         {.fd = md_client.NativeHandle(), .events = POLLIN, .revents = 0},
         {.fd = oe_client.NativeHandle(), .events = POLLIN, .revents = 0},
+        {.fd = session_control_listener.NativeHandle(), .events = POLLIN, .revents = 0},
         {.fd = wake_fd, .events = POLLIN, .revents = 0},
-        {
-            .fd = session_control_listener.NativeHandle(),
-            .events = POLLIN,
-            .revents = 0
-        }
     }};
 
     while (alive.load(std::memory_order_acquire)) {
-        poll_fds[md_index].events = POLLIN;
-        poll_fds[oe_index].events = POLLIN;
-        poll_fds[wake_index].events = POLLIN;
-        poll_fds[session_control_index].events = POLLIN;
-
-        if (!send_queue.empty()) {
-            poll_fds[oe_index].events |= POLLOUT;
-        }
-
-        for (auto& poll_fd : poll_fds) {
-            poll_fd.revents = 0;
-        }
-
-        constexpr std::int32_t poll_timeout_ms = 1000;
-        const int ready = ::poll(
-            poll_fds.data(),
-            static_cast<nfds_t>(poll_fds.size()),
-            poll_timeout_ms);
-
-        if (ready == -1) {
-            if (errno == EINTR) {
-                continue;
+        if (config_.execution_mode == ExecutionMode::Wait) {
+            poll_fds[oe_index].events = POLLIN;
+            if (!send_queue.empty()) {
+                poll_fds[oe_index].events |= POLLOUT;
             }
-
-            throw std::system_error(
-                errno,
-                std::generic_category(),
-                "poll() failed");
+            const int ready = ::poll(poll_fds.data(), poll_fds.size(), 1000);
+            if (ready == -1) {
+                if (errno == EINTR) continue;
+                throw std::system_error(errno, std::generic_category(), "poll() failed");
+            }
+            for (const auto& descriptor : poll_fds) {
+                if (descriptor.revents & POLLNVAL) {
+                    throw std::runtime_error("poll() returned an invalid descriptor");
+                }
+            }
+            if (poll_fds[wake_index].revents & POLLIN) {
+                resetWakeNotif();
+            }
+            if (!alive.load(std::memory_order_acquire)) break;
         }
-
-        if (poll_fds[wake_index].revents & POLLIN) {
-            resetWakeNotif();
-            drainEgress();
-        }
-        if (poll_fds[md_index].revents & POLLIN) {
-            recvMarketEvent(md_client, md_decoder, md_observer.get());
-        }
-        if (poll_fds[oe_index].revents & POLLIN) {
-            recvMarketEvent(oe_client, oe_decoder, oe_observer.get());
-        }
-        if (poll_fds[session_control_index].revents & POLLIN) {
-            recvSessionControl(session_control_listener);
-        }
-        if (poll_fds[oe_index].revents & POLLOUT) {
+        drainEgress();
+        if (!send_queue.empty()) {
             flushSendQueue(oe_client);
         }
 
+        if (!alive.load(std::memory_order_acquire)) {
+            break;
+        }
+
+        recvMarketEvent(md_client, md_decoder, md_observer.get());
+        if (!alive.load(std::memory_order_acquire)) {
+            break;
+        }
+
+        recvMarketEvent(oe_client, oe_decoder, oe_observer.get());
+        if (!alive.load(std::memory_order_acquire)) {
+            break;
+        }
+
+        recvSessionControl(session_control_listener);
         checkHeartbeat();
     }
 }
@@ -218,10 +202,10 @@ void TcpPollServerTransport::recvMarketEvent(
                             "failed to enqueue MarketEvent");
                     }
 
-                    ingress_generation->fetch_add(
-                        1,
-                        std::memory_order_release);
-                    ingress_generation->notify_one();
+                    if (config_.execution_mode == ExecutionMode::Wait) {
+                        ingress_generation->fetch_add(1, std::memory_order_release);
+                        ingress_generation->notify_one();
+                    }
                 }
 
                 if (observer != nullptr) {
@@ -301,28 +285,21 @@ void TcpPollServerTransport::recvSessionControl(
 }
 
 void TcpPollServerTransport::NotifyOutboundReady() {
+    if (wake_fd == -1) return;
     const std::uint64_t signal = 1;
+    while (::write(wake_fd, &signal, sizeof(signal)) == -1) {
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN) return;
+        throw std::system_error(errno, std::generic_category(), "failed to signal eventfd");
+    }
+}
 
-    while (true) {
-        const ::ssize_t result = ::write(
-            wake_fd,
-            &signal,
-            sizeof(signal));
-
-        if (result == sizeof(signal)) {
-            return;
-        }
-        if (result == -1 && errno == EINTR) {
-            continue;
-        }
-        if (result == -1 && errno == EAGAIN) {
-            return;
-        }
-
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "failed to signal eventfd");
+void TcpPollServerTransport::resetWakeNotif() {
+    std::uint64_t count{};
+    while (::read(wake_fd, &count, sizeof(count)) == -1) {
+        if (errno == EINTR) continue;
+        if (errno == EAGAIN) return;
+        throw std::system_error(errno, std::generic_category(), "failed to read eventfd");
     }
 }
 
@@ -460,28 +437,6 @@ void TcpPollServerTransport::queueSessionControl(
         session_control,
         frame.bytes);
     send_queue.push_back(std::move(frame));
-}
-
-void TcpPollServerTransport::resetWakeNotif() {
-    std::uint64_t notification_count{};
-
-    const ::ssize_t result = ::read(
-        wake_fd,
-        &notification_count,
-        sizeof(notification_count));
-
-    if (result == sizeof(notification_count)) {
-        return;
-    }
-    if (result == -1 &&
-        (errno == EAGAIN || errno == EWOULDBLOCK)) {
-        return;
-    }
-
-    throw std::system_error(
-        errno,
-        std::generic_category(),
-        "failed to reset eventfd notification");
 }
 
 }

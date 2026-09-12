@@ -133,6 +133,20 @@ void UdpMulticastServerTransport::Run() {
     }};
 
     while (alive.load(std::memory_order_acquire)) {
+        if (config_.execution_mode != ExecutionMode::Wait) {
+            drainEgress();
+            flushSendQueue(oe_client);
+            if (!alive.load(std::memory_order_acquire)) break;
+            recvMulticastMarketData(md_feed_a, md_observer.get());
+            if (!alive.load(std::memory_order_acquire)) break;
+            recvMulticastMarketData(md_feed_b, md_observer.get());
+            if (!alive.load(std::memory_order_acquire)) break;
+            recvOrderEntry(oe_client, oe_observer.get());
+            if (!alive.load(std::memory_order_acquire)) break;
+            recvSessionControl(session_control_listener);
+            checkHeartbeat();
+            continue;
+        }
         poll_fds[md_a_index].events = POLLIN;
         poll_fds[md_b_index].events = POLLIN;
         poll_fds[oe_index].events = POLLIN;
@@ -283,10 +297,10 @@ void UdpMulticastServerTransport::processMulticastMarketData(
                 "failed to enqueue MarketEvent");
         }
 
-        ingress_generation->fetch_add(
-            1,
-            std::memory_order_release);
-        ingress_generation->notify_one();
+        if (config_.execution_mode == ExecutionMode::Wait) {
+            ingress_generation->fetch_add(1, std::memory_order_release);
+            ingress_generation->notify_one();
+        }
     }
 
     if (observer != nullptr) {
@@ -334,10 +348,10 @@ void UdpMulticastServerTransport::recvOrderEntry(
                             "failed to enqueue MarketEvent");
                     }
 
-                    ingress_generation->fetch_add(
-                        1,
-                        std::memory_order_release);
-                    ingress_generation->notify_one();
+                    if (config_.execution_mode == ExecutionMode::Wait) {
+                        ingress_generation->fetch_add(1, std::memory_order_release);
+                        ingress_generation->notify_one();
+                    }
                 }
 
                 if (observer != nullptr) {
@@ -417,6 +431,7 @@ void UdpMulticastServerTransport::recvSessionControl(
 }
 
 void UdpMulticastServerTransport::NotifyOutboundReady() {
+    if (config_.execution_mode != ExecutionMode::Wait) return;
     const std::uint64_t signal = 1;
 
     while (true) {

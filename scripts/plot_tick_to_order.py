@@ -14,12 +14,12 @@ def parse_arguments():
     parser.add_argument(
         "--input",
         type=Path,
-        default=Path("build-linux/tick_to_order_raw_grpc.csv"),
+        nargs="+",
+        default=[Path("build-linux/tick_to_order_raw_tcp_engine_wait.csv")],
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("build-linux/tick_to_order_grpc.png"),
     )
     parser.add_argument("--bucket-us", type=float, default=1.0)
     parser.add_argument("--max-us", type=float)
@@ -32,31 +32,42 @@ def main():
     if arguments.bucket_us <= 0:
         raise ValueError("--bucket-us must be greater than zero")
 
-    with arguments.input.open(newline="") as raw_file:
-        latency_us = np.asarray([
-            int(row["tto_ns"]) / 1_000.0
-            for row in csv.DictReader(raw_file)
-        ])
+    datasets = []
+    for path in arguments.input:
+        with path.open(newline="") as raw_file:
+            rows = list(csv.DictReader(raw_file))
+        if not rows:
+            raise ValueError(f"no TTO samples in {path}")
+        latency_us = np.asarray([int(row["tto_ns"]) / 1_000.0 for row in rows])
+        label = path.stem.removeprefix("tick_to_order_raw_")
+        datasets.append((label, latency_us))
 
-    if latency_us.size == 0:
-        raise ValueError(f"no TTO samples in {arguments.input}")
+    if arguments.output is None:
+        arguments.output = arguments.input[0].with_name(
+            "tick_to_order_" + "_vs_".join(label for label, _ in datasets) + ".png")
 
     max_us = arguments.max_us
     if max_us is None:
-        max_us = math.ceil(float(np.max(latency_us)) / arguments.bucket_us) \
+        max_us = math.ceil(max(float(np.max(values)) for _, values in datasets) / arguments.bucket_us) \
             * arguments.bucket_us
     if max_us <= 0:
         max_us = arguments.bucket_us
 
-    visible = latency_us[latency_us <= max_us]
     edges = np.arange(0.0, max_us + arguments.bucket_us, arguments.bucket_us)
 
     figure, axes = plt.subplots(figsize=(12, 6))
-    axes.hist(visible, bins=edges, color="#4EA8DE", alpha=0.75)
+    colors = ["#4EA8DE", "#E9B949", "#47A878"]
+    for index, (label, values) in enumerate(datasets):
+        color = colors[index % len(colors)]
+        median = float(np.median(values))
+        axes.hist(values[values <= max_us], bins=edges, color=color, alpha=0.5,
+                  label=f"{label}: n={values.size}, median={median:.3f} us")
+        axes.axvline(median, color=color, linestyle="--")
     axes.set_title("Slipstream tick-to-order latency")
     axes.set_xlabel("Latency (microseconds)")
     axes.set_ylabel("Order count")
     axes.grid(axis="y", alpha=0.25)
+    axes.legend()
     figure.tight_layout()
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)

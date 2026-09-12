@@ -67,6 +67,12 @@ ReplayClientOptions ParseReplayClientOptions(
                     "--transport must be tcp, grpc, or udp-multicast");
             }
             options.transport = value;
+        } else if (option == "--execution-mode") {
+            if (value != "engine_wait" && value != "engine_spin" && value != "engine_probe") {
+                throw std::invalid_argument(
+                    "--execution-mode must be engine_wait, engine_spin, or engine_probe");
+            }
+            options.execution_mode = value;
         } else if (option == "--port") {
             const std::uint64_t port = ParseUnsigned(value, option);
             if (port == 0 ||
@@ -121,6 +127,7 @@ ReplayClientOptions ParseReplayClientOptions(
             " --host <IPv4-address> --port <port> "
             "--start-at-ns <unix-nanoseconds> "
             "[--benchmark] "
+            "[--execution-mode engine_wait|engine_spin|engine_probe] "
             "[--cpu <logical-cpu>] "
             "[--transport tcp|grpc|udp-multicast] "
             "[--md-a-group <IPv4-multicast-address>] "

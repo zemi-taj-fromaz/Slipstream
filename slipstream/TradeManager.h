@@ -37,6 +37,7 @@ public:
     TradeManager(const SlipstreamConfig& slipstream);
 
     TradeManagerResult Push(const MarketEvent& event);
+    TradeDecision Probe(std::uint64_t now_ns);
 
 private:
     VwapWindow vwap_window;

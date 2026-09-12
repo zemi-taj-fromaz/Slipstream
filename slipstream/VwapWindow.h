@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 #include "SlipstreamConfig.h"
 
@@ -61,6 +62,7 @@ public:
     explicit VwapWindow(const SlipstreamConfig& slipstream);
 
     TradeDecision push(TradePrint trade_print);
+    TradeDecision probe(std::uint64_t now_ns);
     [[nodiscard]] std::int64_t RollingVwap() const noexcept;
 
 private:
@@ -92,6 +94,7 @@ private:
     __int128_t sum_market_pq{};
     std::uint64_t sum_market_qty{};
     std::uint64_t sum_user_qty{};
+    std::optional<TradePrint> last_user_trade{};
 };
 
 #endif // SLIPSTREAM_VWAPWINDOW_H
