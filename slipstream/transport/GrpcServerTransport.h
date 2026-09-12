@@ -22,11 +22,8 @@ namespace slipstream {
 
 class GrpcServerTransport final : public IServerTransport {
 public:
-    GrpcServerTransport(
-        const SlipstreamConfig& config,
-        MarketEventQueue& ingress,
-        OrderEntryQueue& egress,
-        std::atomic<std::uint64_t>& ingress_generation);
+    GrpcServerTransport(const SlipstreamConfig& config, MarketEventQueue& ingress, OrderEntryQueue& egress,
+                        std::atomic<std::uint64_t>& ingress_generation);
     ~GrpcServerTransport() override;
 
     GrpcServerTransport(const GrpcServerTransport&) = delete;
@@ -38,13 +35,9 @@ public:
     void Stop() override;
     void NotifyOutboundReady() override;
 
-    [[nodiscard]]
-    TickToOrderStatistics
-    GetTickToOrderStatistics() const noexcept override;
+    [[nodiscard]] TickToOrderStatistics GetTickToOrderStatistics() const noexcept override;
 
-    [[nodiscard]]
-    const TickToOrderHistogram&
-    GetTickToOrderHistogram() const noexcept override;
+    [[nodiscard]] const TickToOrderHistogram& GetTickToOrderHistogram() const noexcept override;
 
 private:
     class CompletionTag;
@@ -67,11 +60,8 @@ private:
     void markOeActivity() noexcept;
     void checkHeartbeat();
     void queueHeartbeat();
-    void recordTickToOrder(
-        std::uint64_t trigger_received_at_ns,
-        std::uint64_t send_started_at_ns,
-        std::int64_t trade_id,
-        bool measure_tick_to_order) noexcept;
+    void recordTickToOrder(std::uint64_t trigger_received_at_ns, std::uint64_t send_started_at_ns,
+                           std::int64_t trade_id, bool measure_tick_to_order) noexcept;
 
     const SlipstreamConfig& config_;
     MarketEventQueue& ingress_;

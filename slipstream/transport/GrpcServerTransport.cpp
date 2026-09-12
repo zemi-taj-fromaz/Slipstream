@@ -26,29 +26,22 @@ std::string Address(const std::string& host, const std::uint16_t port) {
 
 std::uint64_t MonotonicNowNs() noexcept {
     return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
             .count());
 }
 
 std::uint64_t UnixNowNs() noexcept {
     return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch())
             .count());
 }
 
-template <std::size_t Size>
-void CopySymbol(const std::string& source, char (&destination)[Size]) {
+template <std::size_t Size> void CopySymbol(const std::string& source, char (&destination)[Size]) {
     std::fill(std::begin(destination), std::end(destination), '\0');
-    std::copy_n(
-        source.data(),
-        std::min(source.size(), Size),
-        destination);
+    std::copy_n(source.data(), std::min(source.size(), Size), destination);
 }
 
-template <std::size_t Size>
-std::string SymbolText(const char (&symbol)[Size]) {
+template <std::size_t Size> std::string SymbolText(const char (&symbol)[Size]) {
     const char* end = std::find(std::begin(symbol), std::end(symbol), '\0');
     return {std::begin(symbol), end};
 }
@@ -86,8 +79,7 @@ MarketEvent FromGrpcTrade(const grpc_api::Trade& trade) {
     return event;
 }
 
-grpc_api::OeServerMessage ToGrpcMessage(
-    const codec::OrderEntryClientMessage& message) {
+grpc_api::OeServerMessage ToGrpcMessage(const codec::OrderEntryClientMessage& message) {
     grpc_api::OeServerMessage output;
 
     std::visit(
@@ -98,39 +90,28 @@ grpc_api::OeServerMessage ToGrpcMessage(
                 auto* order = output.mutable_new_order();
                 order->set_client_order_id(value.client_order_id);
                 order->set_symbol(SymbolText(value.symbol));
-                order->set_status(
-                    value.status == codec::NewOrderStatus::accepted
-                        ? grpc_api::NewOrder::ACCEPTED
-                        : grpc_api::NewOrder::REJECTED);
+                order->set_status(value.status == codec::NewOrderStatus::accepted ? grpc_api::NewOrder::ACCEPTED
+                                                                                  : grpc_api::NewOrder::REJECTED);
                 order->set_ts_ns(value.ts_ns);
                 order->set_trade_id(value.trade_id);
-                order->set_side(
-                    value.side == codec::OrderSide::buy
-                        ? grpc_api::NewOrder::BUY
-                        : grpc_api::NewOrder::SELL);
+                order->set_side(value.side == codec::OrderSide::buy ? grpc_api::NewOrder::BUY
+                                                                    : grpc_api::NewOrder::SELL);
                 order->set_qty(value.qty);
                 order->set_limit_price(value.limit_px);
-            } else if constexpr (
-                std::is_same_v<Message, codec::ExecReportMessage>) {
+            } else if constexpr (std::is_same_v<Message, codec::ExecReportMessage>) {
                 auto* report = output.mutable_exec_report();
                 report->set_client_order_id(value.client_order_id);
                 report->set_ts_ns(value.ts_ns);
-                report->set_status(
-                    static_cast<grpc_api::ExecReport::Status>(value.status));
+                report->set_status(static_cast<grpc_api::ExecReport::Status>(value.status));
                 report->set_filled_qty(value.filled_qty);
                 report->set_avg_price(value.avg_px);
-                report->set_reason_code(
-                    static_cast<grpc_api::ExecReport::RejectReason>(
-                        value.reason_code));
-            } else if constexpr (
-                std::is_same_v<Message, codec::HeartbeatMessage>) {
+                report->set_reason_code(static_cast<grpc_api::ExecReport::RejectReason>(value.reason_code));
+            } else if constexpr (std::is_same_v<Message, codec::HeartbeatMessage>) {
                 output.mutable_heartbeat()->set_ts_ns(value.ts_ns);
-            } else if constexpr (
-                std::is_same_v<Message, codec::SessionControlMessage>) {
+            } else if constexpr (std::is_same_v<Message, codec::SessionControlMessage>) {
                 auto* control = output.mutable_session_control();
                 control->set_ts_ns(value.ts_ns);
-                control->set_state(
-                    static_cast<grpc_api::SessionControl::State>(value.state));
+                control->set_state(static_cast<grpc_api::SessionControl::State>(value.state));
             }
         },
         message);
@@ -148,8 +129,7 @@ public:
 
 class GrpcServerTransport::OutboundWakeTag final : public CompletionTag {
 public:
-    explicit OutboundWakeTag(GrpcServerTransport& owner)
-        : owner_{owner} {}
+    explicit OutboundWakeTag(GrpcServerTransport& owner) : owner_{owner} {}
 
     void Complete(const bool ok) override {
         owner_.onOutboundWake(ok);
@@ -161,15 +141,9 @@ private:
 
 class GrpcServerTransport::MdConnection final : public CompletionTag {
 public:
-    explicit MdConnection(GrpcServerTransport& owner)
-        : owner_{owner},
-          reader_{&context_} {
-        owner_.market_data_service_.RequestConnect(
-            &context_,
-            &reader_,
-            owner_.completion_queue_.get(),
-            owner_.completion_queue_.get(),
-            this);
+    explicit MdConnection(GrpcServerTransport& owner) : owner_{owner}, reader_{&context_} {
+        owner_.market_data_service_.RequestConnect(&context_, &reader_, owner_.completion_queue_.get(),
+                                                   owner_.completion_queue_.get(), this);
     }
 
     void Complete(const bool ok) override {
@@ -185,8 +159,7 @@ public:
 
         case State::Reading:
             if (!ok) {
-                if (owner_.shutdown_requested_.load(
-                        std::memory_order_acquire)) {
+                if (owner_.shutdown_requested_.load(std::memory_order_acquire)) {
                     state_ = State::Finished;
                     return;
                 }
@@ -218,9 +191,7 @@ private:
 
     void processQuote() {
         MarketEvent event = FromGrpcQuote(quote_);
-        if (std::strcmp(
-                event.symbol,
-                owner_.config_.symbol.c_str()) != 0) [[likely]] {
+        if (std::strcmp(event.symbol, owner_.config_.symbol.c_str()) != 0) [[likely]] {
             return;
         }
 
@@ -258,18 +229,10 @@ public:
     };
 
     explicit OeConnection(GrpcServerTransport& owner)
-        : owner_{owner},
-          stream_{&context_},
-          connect_tag_{*this, Operation::Connect},
-          read_tag_{*this, Operation::Read},
-          write_tag_{*this, Operation::Write},
-          finish_tag_{*this, Operation::Finish} {
-        owner_.order_entry_service_.RequestConnect(
-            &context_,
-            &stream_,
-            owner_.completion_queue_.get(),
-            owner_.completion_queue_.get(),
-            &connect_tag_);
+        : owner_{owner}, stream_{&context_}, connect_tag_{*this, Operation::Connect}, read_tag_{*this, Operation::Read},
+          write_tag_{*this, Operation::Write}, finish_tag_{*this, Operation::Finish} {
+        owner_.order_entry_service_.RequestConnect(&context_, &stream_, owner_.completion_queue_.get(),
+                                                   owner_.completion_queue_.get(), &connect_tag_);
     }
 
     void Enqueue(PendingWrite write) {
@@ -294,8 +257,7 @@ private:
 
     class OperationTag final : public CompletionTag {
     public:
-        OperationTag(OeConnection& owner, const Operation operation)
-            : owner_{owner}, operation_{operation} {}
+        OperationTag(OeConnection& owner, const Operation operation) : owner_{owner}, operation_{operation} {}
 
         void Complete(const bool ok) override {
             owner_.complete(operation_, ok);
@@ -347,8 +309,7 @@ private:
     void onReadCompleted(const bool ok) {
         read_in_flight_ = false;
         if (!ok) {
-            if (owner_.shutdown_requested_.load(
-                    std::memory_order_acquire)) {
+            if (owner_.shutdown_requested_.load(std::memory_order_acquire)) {
                 finished_ = true;
                 return;
             }
@@ -359,9 +320,7 @@ private:
 
         if (inbound_.payload_case() == grpc_api::OeClientMessage::kTrade) {
             MarketEvent event = FromGrpcTrade(inbound_.trade());
-            if (std::strcmp(
-                    event.symbol,
-                    owner_.config_.symbol.c_str()) != 0) [[likely]] {
+            if (std::strcmp(event.symbol, owner_.config_.symbol.c_str()) != 0) [[likely]] {
                 startRead();
                 return;
             }
@@ -399,8 +358,7 @@ private:
         write_in_flight_ = false;
         if (!ok) {
             pending_writes_.clear();
-            if (owner_.shutdown_requested_.load(
-                    std::memory_order_acquire)) {
+            if (owner_.shutdown_requested_.load(std::memory_order_acquire)) {
                 finished_ = true;
                 return;
             }
@@ -409,11 +367,8 @@ private:
             return;
         }
 
-        owner_.recordTickToOrder(
-            current_write_.trigger_received_at_ns,
-            current_write_.send_started_at_ns,
-            current_write_.trade_id,
-            current_write_.measure_tick_to_order);
+        owner_.recordTickToOrder(current_write_.trigger_received_at_ns, current_write_.send_started_at_ns,
+                                 current_write_.trade_id, current_write_.measure_tick_to_order);
 
         if (current_write_.close_after_write) {
             pending_writes_.clear();
@@ -437,9 +392,7 @@ private:
 
     GrpcServerTransport& owner_;
     grpc::ServerContext context_;
-    grpc::ServerAsyncReaderWriter<
-        grpc_api::OeServerMessage,
-        grpc_api::OeClientMessage> stream_;
+    grpc::ServerAsyncReaderWriter<grpc_api::OeServerMessage, grpc_api::OeClientMessage> stream_;
     grpc_api::OeClientMessage inbound_;
     PendingWrite current_write_{};
     std::deque<PendingWrite> pending_writes_;
@@ -457,15 +410,9 @@ private:
     bool finished_{false};
 };
 
-GrpcServerTransport::GrpcServerTransport(
-    const SlipstreamConfig& config,
-    MarketEventQueue& ingress,
-    OrderEntryQueue& egress,
-    std::atomic<std::uint64_t>& ingress_generation)
-    : config_{config},
-      ingress_{ingress},
-      egress_{egress},
-      ingress_generation_{ingress_generation} {}
+GrpcServerTransport::GrpcServerTransport(const SlipstreamConfig& config, MarketEventQueue& ingress,
+                                         OrderEntryQueue& egress, std::atomic<std::uint64_t>& ingress_generation)
+    : config_{config}, ingress_{ingress}, egress_{egress}, ingress_generation_{ingress_generation} {}
 
 GrpcServerTransport::~GrpcServerTransport() {
     Stop();
@@ -478,12 +425,8 @@ void GrpcServerTransport::Run() {
     session_control_listener_.Bind("127.0.0.1", 9099);
 
     grpc::ServerBuilder builder;
-    builder.AddListeningPort(
-        Address(config_.md_host, config_.md_port),
-        grpc::InsecureServerCredentials());
-    builder.AddListeningPort(
-        Address(config_.oe_host, config_.oe_port),
-        grpc::InsecureServerCredentials());
+    builder.AddListeningPort(Address(config_.md_host, config_.md_port), grpc::InsecureServerCredentials());
+    builder.AddListeningPort(Address(config_.oe_host, config_.oe_port), grpc::InsecureServerCredentials());
     builder.RegisterService(&market_data_service_);
     builder.RegisterService(&order_entry_service_);
 
@@ -514,12 +457,11 @@ void GrpcServerTransport::Run() {
         while (true) {
             void* raw_tag = nullptr;
             bool ok = false;
-            const auto result = completion_queue_->AsyncNext(
-                &raw_tag,
-                &ok,
-                std::chrono::system_clock::now() +
-                    (config_.execution_mode == ExecutionMode::Wait
-                        ? std::chrono::seconds{1} : std::chrono::seconds{0}));
+            const auto result = completion_queue_->AsyncNext(&raw_tag, &ok,
+                                                             std::chrono::system_clock::now() +
+                                                                 (config_.execution_mode == ExecutionMode::Wait
+                                                                      ? std::chrono::seconds{1}
+                                                                      : std::chrono::seconds{0}));
 
             if (result == grpc::CompletionQueue::GOT_EVENT) {
                 dispatchCompletion(raw_tag, ok);
@@ -527,8 +469,7 @@ void GrpcServerTransport::Run() {
                 break;
             }
 
-            if (config_.execution_mode != ExecutionMode::Wait &&
-                !shutdown_requested_.load(std::memory_order_acquire)) {
+            if (config_.execution_mode != ExecutionMode::Wait && !shutdown_requested_.load(std::memory_order_acquire)) {
                 drainEgress();
             }
             drainSessionControl();
@@ -559,31 +500,26 @@ void GrpcServerTransport::Stop() {
 }
 
 void GrpcServerTransport::NotifyOutboundReady() {
-    if (config_.execution_mode != ExecutionMode::Wait) return;
+    if (config_.execution_mode != ExecutionMode::Wait)
+        return;
     if (outbound_wake_pending_.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
 
     std::scoped_lock lock{lifecycle_mutex_};
-    if (completion_queue_ == nullptr ||
-        outbound_wake_tag_ == nullptr || shutdown_started_) {
+    if (completion_queue_ == nullptr || outbound_wake_tag_ == nullptr || shutdown_started_) {
         outbound_wake_pending_.store(false, std::memory_order_release);
         return;
     }
 
-    outbound_wake_alarm_.Set(
-        completion_queue_.get(),
-        std::chrono::system_clock::now(),
-        outbound_wake_tag_.get());
+    outbound_wake_alarm_.Set(completion_queue_.get(), std::chrono::system_clock::now(), outbound_wake_tag_.get());
 }
 
-TickToOrderStatistics
-GrpcServerTransport::GetTickToOrderStatistics() const noexcept {
+TickToOrderStatistics GrpcServerTransport::GetTickToOrderStatistics() const noexcept {
     return tick_to_order_histogram_.GetStatistics();
 }
 
-const TickToOrderHistogram&
-GrpcServerTransport::GetTickToOrderHistogram() const noexcept {
+const TickToOrderHistogram& GrpcServerTransport::GetTickToOrderHistogram() const noexcept {
     return tick_to_order_histogram_;
 }
 
@@ -646,9 +582,8 @@ void GrpcServerTransport::drainSessionControl() {
     while (!shutdown_requested_.load(std::memory_order_acquire)) {
         const ::ssize_t received = session_control_listener_.RecvDatagram(buffer);
         if (received > 0) {
-            processSessionCommand(std::string_view{
-                reinterpret_cast<const char*>(buffer.data()),
-                static_cast<std::size_t>(received)});
+            processSessionCommand(
+                std::string_view{reinterpret_cast<const char*>(buffer.data()), static_cast<std::size_t>(received)});
             continue;
         }
         if (received == 0) {
@@ -660,10 +595,7 @@ void GrpcServerTransport::drainSessionControl() {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return;
         }
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "session-control recv failed");
+        throw std::system_error(errno, std::generic_category(), "session-control recv failed");
     }
 }
 
@@ -703,8 +635,8 @@ void GrpcServerTransport::markOeActivity() noexcept {
 }
 
 void GrpcServerTransport::checkHeartbeat() {
-    if (shutdown_requested_.load(std::memory_order_acquire) ||
-        oe_connection_ == nullptr || !oe_connection_->CanWrite()) {
+    if (shutdown_requested_.load(std::memory_order_acquire) || oe_connection_ == nullptr ||
+        !oe_connection_->CanWrite()) {
         return;
     }
 
@@ -713,13 +645,8 @@ void GrpcServerTransport::checkHeartbeat() {
         return;
     }
 
-    const auto silent_seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(
-            now - last_oe_activity_)
-            .count();
-    spdlog::warn(
-        "OE client has been silent for {} seconds; sending heartbeat",
-        silent_seconds);
+    const auto silent_seconds = std::chrono::duration_cast<std::chrono::seconds>(now - last_oe_activity_).count();
+    spdlog::warn("OE client has been silent for {} seconds; sending heartbeat", silent_seconds);
     queueHeartbeat();
     next_heartbeat_ = now + heartbeat_interval;
 }
@@ -734,20 +661,15 @@ void GrpcServerTransport::queueHeartbeat() {
     });
 }
 
-void GrpcServerTransport::recordTickToOrder(
-    const std::uint64_t trigger_received_at_ns,
-    const std::uint64_t send_started_at_ns,
-    const std::int64_t trade_id,
-    const bool measure_tick_to_order) noexcept {
+void GrpcServerTransport::recordTickToOrder(const std::uint64_t trigger_received_at_ns,
+                                            const std::uint64_t send_started_at_ns, const std::int64_t trade_id,
+                                            const bool measure_tick_to_order) noexcept {
     if (!measure_tick_to_order) {
         return;
     }
 
     if (send_started_at_ns >= trigger_received_at_ns) {
-        tick_to_order_histogram_.Record(
-            trigger_received_at_ns,
-            send_started_at_ns,
-            trade_id);
+        tick_to_order_histogram_.Record(trigger_received_at_ns, send_started_at_ns, trade_id);
     }
 }
 

@@ -15,38 +15,28 @@
 #include <functional>
 
 class Engine {
-    public:
-    Engine(const SlipstreamConfig& slipstream,
-        slipstream::MarketEventQueue& in,
-        slipstream::OrderEntryQueue& out,
-        std::atomic<std::uint64_t>& ingress_generation,
-        std::function<void()> notify_egress);
+public:
+    Engine(const SlipstreamConfig& slipstream, slipstream::MarketEventQueue& in, slipstream::OrderEntryQueue& out,
+           std::atomic<std::uint64_t>& ingress_generation, std::function<void()> notify_egress);
 
-        void Run();
-        void Stop() noexcept;
-        [[nodiscard]]
-        const ExecutionReport& GetExecutionReport() const noexcept;
+    void Run();
+    void Stop() noexcept;
+    [[nodiscard]] const ExecutionReport& GetExecutionReport() const noexcept;
 
+private:
+    [[nodiscard]] bool PushOutbound(const slipstream::codec::OrderEntryClientMessage& outbound,
+                                    std::uint64_t trigger_received_at_ns = 0, bool measure_tick_to_order = false);
+    const SlipstreamConfig& config_;
+    TradeManager trade_manager;
+    ExecutionReport execution_report_;
 
-    private:
-        [[nodiscard]]
-        bool PushOutbound(
-            const slipstream::codec::OrderEntryClientMessage& outbound,
-            std::uint64_t trigger_received_at_ns = 0,
-            bool measure_tick_to_order = false);
-        const SlipstreamConfig& config_;
-        TradeManager trade_manager;
-        ExecutionReport execution_report_;
+    slipstream::MarketEventQueue& ingress;
+    slipstream::OrderEntryQueue& egress;
+    std::atomic<std::uint64_t>& ingress_generation;
+    std::function<void()> notify_egress;
 
-        slipstream::MarketEventQueue& ingress;
-        slipstream::OrderEntryQueue& egress;
-        std::atomic<std::uint64_t>& ingress_generation;
-        std::function<void()> notify_egress;
-
-        std::atomic_bool running{true};
-        std::uint64_t next_client_order_id{1};
-
+    std::atomic_bool running{true};
+    std::uint64_t next_client_order_id{1};
 };
-
 
 #endif //SLIPSTREAM_ENGINE_H

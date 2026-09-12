@@ -12,18 +12,17 @@
 
 namespace {
 
-MarketEvent MakeQuote(
-    const std::uint64_t ts,
-    const std::int64_t ask_price) {
+MarketEvent MakeQuote(const std::uint64_t ts, const std::int64_t ask_price) {
     MarketEvent event{
         .ts = ts,
         .symbol = {},
-        .payload = Quote{
-            .bid_price = 999'000,
-            .ask_price = ask_price,
-            .bid_qty = 1'000,
-            .ask_qty = 1'000,
-        },
+        .payload =
+            Quote{
+                .bid_price = 999'000,
+                .ask_price = ask_price,
+                .bid_qty = 1'000,
+                .ask_qty = 1'000,
+            },
     };
     std::memcpy(event.symbol, "SYNTH1", 6);
     return event;
@@ -33,12 +32,13 @@ MarketEvent MakeTrade() {
     MarketEvent event{
         .ts = 1'000'000'000ULL,
         .symbol = {},
-        .payload = Trade{
-            .price = 997'000,
-            .id = 77,
-            .qty = 100,
-            .aggressor = '?',
-        },
+        .payload =
+            Trade{
+                .price = 997'000,
+                .id = 77,
+                .qty = 100,
+                .aggressor = '?',
+            },
     };
     std::memcpy(event.symbol, "SYNTH1", 6);
     return event;
@@ -59,14 +59,8 @@ TEST_P(EngineModes, ProcessesIngressAndProducesOrderLifecycle) {
     std::atomic<std::uint64_t> ingress_generation{0};
     std::atomic<std::uint64_t> notifications{0};
 
-    Engine engine{
-        config,
-        ingress,
-        egress,
-        ingress_generation,
-        [&notifications] {
-            notifications.fetch_add(1, std::memory_order_relaxed);
-        }};
+    Engine engine{config, ingress, egress, ingress_generation,
+                  [&notifications] { notifications.fetch_add(1, std::memory_order_relaxed); }};
 
     const auto enqueue = [&](MarketEvent event, const std::uint64_t received) {
         const slipstream::InboundEvent inbound{
@@ -79,26 +73,16 @@ TEST_P(EngineModes, ProcessesIngressAndProducesOrderLifecycle) {
 
     enqueue(MakeQuote(0, 1'000'000), 1);
     for (std::uint64_t index = 0; index < 10; ++index) {
-        const std::uint64_t timestamp = index == 9
-            ? 1'000'000'000ULL
-            : index * 100'000'000ULL;
-        enqueue(
-            MakeQuote(
-                timestamp,
-                1'000'100 + static_cast<std::int64_t>(index) * 100),
-            index + 2);
+        const std::uint64_t timestamp = index == 9 ? 1'000'000'000ULL : index * 100'000'000ULL;
+        enqueue(MakeQuote(timestamp, 1'000'100 + static_cast<std::int64_t>(index) * 100), index + 2);
     }
     enqueue(MakeTrade(), 100);
 
-    std::jthread engine_thread{[&engine] {
-        engine.Run();
-    }};
+    std::jthread engine_thread{[&engine] { engine.Run(); }};
 
     std::vector<slipstream::OutboundMessage> outbound;
-    const auto deadline =
-        std::chrono::steady_clock::now() + std::chrono::seconds{1};
-    while (outbound.size() < 3 &&
-           std::chrono::steady_clock::now() < deadline) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{1};
+    while (outbound.size() < 3 && std::chrono::steady_clock::now() < deadline) {
         slipstream::OutboundMessage message{};
         if (egress.pop(message)) {
             outbound.push_back(message);
@@ -111,15 +95,11 @@ TEST_P(EngineModes, ProcessesIngressAndProducesOrderLifecycle) {
     engine_thread.join();
 
     ASSERT_EQ(outbound.size(), 3U);
-    ASSERT_TRUE(std::holds_alternative<
-        slipstream::codec::NewOrderMessage>(outbound[0].message));
-    ASSERT_TRUE(std::holds_alternative<
-        slipstream::codec::ExecReportMessage>(outbound[1].message));
-    ASSERT_TRUE(std::holds_alternative<
-        slipstream::codec::ExecReportMessage>(outbound[2].message));
+    ASSERT_TRUE(std::holds_alternative<slipstream::codec::NewOrderMessage>(outbound[0].message));
+    ASSERT_TRUE(std::holds_alternative<slipstream::codec::ExecReportMessage>(outbound[1].message));
+    ASSERT_TRUE(std::holds_alternative<slipstream::codec::ExecReportMessage>(outbound[2].message));
 
-    const auto& order = std::get<slipstream::codec::NewOrderMessage>(
-        outbound[0].message);
+    const auto& order = std::get<slipstream::codec::NewOrderMessage>(outbound[0].message);
     EXPECT_EQ(order.trade_id, 77);
     EXPECT_EQ(order.status, slipstream::codec::NewOrderStatus::accepted);
     EXPECT_EQ(order.side, slipstream::codec::OrderSide::buy);
@@ -127,10 +107,8 @@ TEST_P(EngineModes, ProcessesIngressAndProducesOrderLifecycle) {
     EXPECT_TRUE(outbound[0].measure_tick_to_order);
     EXPECT_EQ(outbound[0].trigger_received_at_ns, 100U);
 
-    const auto& ack = std::get<slipstream::codec::ExecReportMessage>(
-        outbound[1].message);
-    const auto& fill = std::get<slipstream::codec::ExecReportMessage>(
-        outbound[2].message);
+    const auto& ack = std::get<slipstream::codec::ExecReportMessage>(outbound[1].message);
+    const auto& fill = std::get<slipstream::codec::ExecReportMessage>(outbound[2].message);
     EXPECT_EQ(ack.status, slipstream::codec::ExecStatus::ack);
     EXPECT_EQ(fill.status, slipstream::codec::ExecStatus::fill);
     EXPECT_EQ(fill.filled_qty, 100U);
@@ -158,8 +136,7 @@ TEST_P(EngineModes, AcceptsNotificationAfterDrainingIngressAndStopsWhenIdle) {
     ASSERT_TRUE(ingress.push({.message = MakeQuote(0, 1'000'000), .received_at_ns = 1}));
     for (std::uint64_t index = 0; index < 12; ++index) {
         ASSERT_TRUE(ingress.push({
-            .message = MakeQuote(index == 0 ? 0 : 1'000'000'000ULL,
-                1'000'100 + static_cast<std::int64_t>(index) * 100),
+            .message = MakeQuote(index == 0 ? 0 : 1'000'000'000ULL, 1'000'100 + static_cast<std::int64_t>(index) * 100),
             .received_at_ns = index + 2,
         }));
     }
@@ -184,8 +161,8 @@ TEST_P(EngineModes, AcceptsNotificationAfterDrainingIngressAndStopsWhenIdle) {
     EXPECT_TRUE(std::holds_alternative<slipstream::codec::NewOrderMessage>(message.message));
 }
 
-INSTANTIATE_TEST_SUITE_P(AllPolicies, EngineModes, ::testing::Values(
-    ExecutionMode::Wait, ExecutionMode::Spin, ExecutionMode::Probe));
+INSTANTIATE_TEST_SUITE_P(AllPolicies, EngineModes,
+                         ::testing::Values(ExecutionMode::Wait, ExecutionMode::Spin, ExecutionMode::Probe));
 
 TEST(ExecutionMode, ParsesNamesAndRejectsUnknownMode) {
     for (auto mode : {ExecutionMode::Wait, ExecutionMode::Spin, ExecutionMode::Probe}) {

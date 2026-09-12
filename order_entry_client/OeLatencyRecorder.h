@@ -9,8 +9,7 @@
 
 class OeLatencyRecorder {
 public:
-    OeLatencyRecorder(std::string transport, std::string output_path,
-                      std::string execution_mode = "engine_wait");
+    OeLatencyRecorder(std::string transport, std::string output_path, std::string execution_mode = "engine_wait");
 
     void RecordSend(std::int64_t trade_id);
     void RecordConfirmation(std::int64_t trade_id, char status);

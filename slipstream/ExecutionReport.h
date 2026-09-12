@@ -31,13 +31,9 @@ public:
     static constexpr std::size_t raw_sample_capacity = 2'048;
 
     void Record(std::uint64_t latency_ns) noexcept;
-    void Record(
-        std::uint64_t received_ns,
-        std::uint64_t send_started_ns,
-        std::int64_t trade_id) noexcept;
+    void Record(std::uint64_t received_ns, std::uint64_t send_started_ns, std::int64_t trade_id) noexcept;
 
-    [[nodiscard]]
-    TickToOrderStatistics GetStatistics() const noexcept;
+    [[nodiscard]] TickToOrderStatistics GetStatistics() const noexcept;
 
     void WriteRawCsv(std::ostream& output, std::string_view transport = "tcp",
                      ExecutionMode mode = ExecutionMode::Wait) const;
@@ -68,13 +64,8 @@ struct ExecutionReport {
     TickToOrderStatistics tick_to_order{};
 };
 
-[[nodiscard]]
-TickToOrderStatistics CalculateTickToOrderStatistics(
-    std::span<const std::uint64_t> samples);
+[[nodiscard]] TickToOrderStatistics CalculateTickToOrderStatistics(std::span<const std::uint64_t> samples);
 
-[[nodiscard]]
-std::string FormatExecutionReport(
-    const ExecutionReport& report,
-    const SlipstreamConfig& config);
+[[nodiscard]] std::string FormatExecutionReport(const ExecutionReport& report, const SlipstreamConfig& config);
 
 #endif

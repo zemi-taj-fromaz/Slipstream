@@ -37,8 +37,7 @@ std::string SymbolText(const char* symbol, const std::size_t size) {
     return {symbol, end};
 }
 
-slipstream::codec::RejectReason ToRejectReason(
-    const TradeResult result) noexcept {
+slipstream::codec::RejectReason ToRejectReason(const TradeResult result) noexcept {
     if (result == TradeResult::UserTradeRejectedBand) {
         return slipstream::codec::RejectReason::price;
     }
@@ -55,16 +54,9 @@ slipstream::codec::RejectReason ToRejectReason(
 
 } // namespace
 
-Engine::Engine(const SlipstreamConfig& slipstream,
-               slipstream::MarketEventQueue& in,
-               slipstream::OrderEntryQueue& out,
-               std::atomic<std::uint64_t>& generation,
-               std::function<void()> egress_notifier)
-    : config_(slipstream),
-      trade_manager(slipstream),
-      ingress(in),
-      egress(out),
-      ingress_generation(generation),
+Engine::Engine(const SlipstreamConfig& slipstream, slipstream::MarketEventQueue& in, slipstream::OrderEntryQueue& out,
+               std::atomic<std::uint64_t>& generation, std::function<void()> egress_notifier)
+    : config_(slipstream), trade_manager(slipstream), ingress(in), egress(out), ingress_generation(generation),
       notify_egress(std::move(egress_notifier)) {}
 
 void Engine::Run() {
@@ -73,8 +65,8 @@ void Engine::Run() {
     bool timestamp_initialized{false};
 
     while (running.load(std::memory_order_relaxed)) {
-        const auto generation = config_.execution_mode == ExecutionMode::Wait
-            ? ingress_generation.load(std::memory_order_acquire) : 0;
+        const auto generation =
+            config_.execution_mode == ExecutionMode::Wait ? ingress_generation.load(std::memory_order_acquire) : 0;
         slipstream::InboundEvent inbound{};
         const bool new_data = ingress.pop(inbound);
 
@@ -89,8 +81,7 @@ void Engine::Run() {
             } else if (timestamp_initialized) {
                 const auto now = std::chrono::steady_clock::now();
                 const auto elapsed = now - last_steady_timestamp;
-                const auto elapsed_ns = std::chrono::duration_cast<
-                    std::chrono::nanoseconds>(elapsed).count();
+                const auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
                 const auto timestamp = last_market_timestamp + elapsed_ns;
 
                 DoNotOptimize(trade_manager.Probe(timestamp));
@@ -118,21 +109,18 @@ void Engine::Run() {
         const TradeResult result = decision.result;
         const auto* trade = std::get_if<Trade>(&event.payload);
         if (trade == nullptr) {
-            throw std::logic_error(
-                "user trade result produced for a non-trade event");
+            throw std::logic_error("user trade result produced for a non-trade event");
         }
 
         execution_report_.submitted_qty += decision.submitted_qty;
 
         const bool rejected = IsUserTradeRejected(result);
-        const bool partial =
-            result == TradeResult::UserTradePartial_MaxQuantity ||
-            result == TradeResult::UserTradePartial_ParticipationCap;
+        const bool partial = result == TradeResult::UserTradePartial_MaxQuantity ||
+                             result == TradeResult::UserTradePartial_ParticipationCap;
         const bool executed = !rejected && decision.executed_qty != 0;
 
         if (executed) {
-            const __int128_t pq =
-                static_cast<__int128_t>(trade->price) * decision.executed_qty;
+            const __int128_t pq = static_cast<__int128_t>(trade->price) * decision.executed_qty;
             execution_report_.executed_qty += decision.executed_qty;
             execution_report_.executed_pq_sum += pq;
 
@@ -143,60 +131,44 @@ void Engine::Run() {
                 execution_report_.sell_qty += decision.executed_qty;
                 execution_report_.sell_pq_sum += pq;
             } else {
-                throw std::logic_error(
-                    "executed user trade has unknown side");
+                throw std::logic_error("executed user trade has unknown side");
             }
         }
 
         if (IsUserTradeResult(result)) {
             if (decision.side == TradeSide::Unknown) {
-                throw std::logic_error(
-                    "user trade decision has unknown side");
+                throw std::logic_error("user trade decision has unknown side");
             }
 
             if (rejected && !config_.benchmark) {
-                std::cout
-                    << "[slipstream] Rejecting NewOrder reason="
-                    << TradeRejectionReason(result)
-                    << " trade_id=" << trade->id
-                    << " symbol=" << SymbolText(
-                        event.symbol,
-                        sizeof(event.symbol))
-                    << " qty=" << trade->qty
-                    << " price=" << trade->price
-                    << " vwap=" << user.rolling_vwap
-                    << " band_bps=" << config_.band_bps
-                    << '\n'
-                    << std::flush;
+                std::cout << "[slipstream] Rejecting NewOrder reason=" << TradeRejectionReason(result)
+                          << " trade_id=" << trade->id << " symbol=" << SymbolText(event.symbol, sizeof(event.symbol))
+                          << " qty=" << trade->qty << " price=" << trade->price << " vwap=" << user.rolling_vwap
+                          << " band_bps=" << config_.band_bps << '\n'
+                          << std::flush;
             }
 
             const std::uint64_t client_order_id = next_client_order_id++;
 
             slipstream::codec::NewOrderMessage order{
                 .client_order_id = client_order_id,
-                .status = rejected
-                    ? slipstream::codec::NewOrderStatus::rejected
-                    : slipstream::codec::NewOrderStatus::accepted,
+                .status = rejected ? slipstream::codec::NewOrderStatus::rejected
+                                   : slipstream::codec::NewOrderStatus::accepted,
                 .ts_ns = event.ts,
                 .trade_id = trade->id,
 
-                .side = decision.side == TradeSide::Sell
-                    ? slipstream::codec::OrderSide::sell
-                    : slipstream::codec::OrderSide::buy,
+                .side = decision.side == TradeSide::Sell ? slipstream::codec::OrderSide::sell
+                                                         : slipstream::codec::OrderSide::buy,
                 .qty = decision.submitted_qty,
                 .limit_px = trade->price,
             };
             std::memcpy(order.symbol, event.symbol, sizeof(order.symbol));
 
-            if (!PushOutbound(
-                    order,
-                    inbound.received_at_ns,
-                    true)) {
+            if (!PushOutbound(order, inbound.received_at_ns, true)) {
                 return;
             }
 
-            const slipstream::codec::RejectReason reason =
-                ToRejectReason(result);
+            const slipstream::codec::RejectReason reason = ToRejectReason(result);
 
             if (rejected) {
                 const slipstream::codec::ExecReportMessage reject_report{
@@ -230,9 +202,7 @@ void Engine::Run() {
                     .ts_ns = event.ts,
                     .avg_px = trade->price,
                     .filled_qty = decision.executed_qty,
-                    .status = partial
-                        ? slipstream::codec::ExecStatus::partial
-                        : slipstream::codec::ExecStatus::fill,
+                    .status = partial ? slipstream::codec::ExecStatus::partial : slipstream::codec::ExecStatus::fill,
                     .reason_code = reason,
                 };
 
@@ -252,12 +222,9 @@ void Engine::Stop() noexcept {
     ingress_generation.notify_one();
 }
 
-bool Engine::PushOutbound(
-    const slipstream::codec::OrderEntryClientMessage& outbound,
-    const std::uint64_t trigger_received_at_ns,
-    const bool measure_tick_to_order) {
-    const auto* order =
-        std::get_if<slipstream::codec::NewOrderMessage>(&outbound);
+bool Engine::PushOutbound(const slipstream::codec::OrderEntryClientMessage& outbound,
+                          const std::uint64_t trigger_received_at_ns, const bool measure_tick_to_order) {
+    const auto* order = std::get_if<slipstream::codec::NewOrderMessage>(&outbound);
     const slipstream::OutboundMessage message{
         .message = outbound,
         .trigger_received_at_ns = trigger_received_at_ns,

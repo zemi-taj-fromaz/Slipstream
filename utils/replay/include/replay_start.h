@@ -21,10 +21,7 @@ struct ReplayClientOptions {
     std::string md_multicast_interface{"0.0.0.0"};
 };
 
-[[nodiscard]] ReplayClientOptions ParseReplayClientOptions(
-    int argc,
-    char* const argv[],
-    unsigned default_cpu);
+[[nodiscard]] ReplayClientOptions ParseReplayClientOptions(int argc, char* const argv[], unsigned default_cpu);
 
 [[nodiscard]] bool ReplayVerificationEnabled() noexcept;
 

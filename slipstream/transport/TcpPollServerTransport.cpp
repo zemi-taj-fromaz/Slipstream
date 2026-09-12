@@ -26,16 +26,13 @@ namespace {
 
 std::uint64_t MonotonicNowNs() noexcept {
     return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
             .count());
 }
 
 }
 
-TcpPollServerTransport::TcpPollServerTransport(
-    const SlipstreamConfig& config)
-    : config_{config} {
+TcpPollServerTransport::TcpPollServerTransport(const SlipstreamConfig& config) : config_{config} {
     if (config_.execution_mode == ExecutionMode::Wait) {
         wake_fd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
         if (wake_fd == -1) {
@@ -44,11 +41,8 @@ TcpPollServerTransport::TcpPollServerTransport(
     }
 }
 
-TcpPollServerTransport::TcpPollServerTransport(
-    const SlipstreamConfig& config,
-    MarketEventQueue& in,
-    OrderEntryQueue& out,
-    std::atomic<std::uint64_t>& generation)
+TcpPollServerTransport::TcpPollServerTransport(const SlipstreamConfig& config, MarketEventQueue& in,
+                                               OrderEntryQueue& out, std::atomic<std::uint64_t>& generation)
     : TcpPollServerTransport(config) {
     ingress = &in;
     egress = &out;
@@ -69,17 +63,11 @@ void TcpPollServerTransport::Run() {
     std::unique_ptr<IEventObserver> oe_observer;
 
     if (utils::ReplayVerificationEnabled()) {
-        const std::string received_quotes_path =
-            std::string{SLIPSTREAM_VERIFICATION_DIR} +
-            "/received_quotes.csv";
-        const std::string received_trades_path =
-            std::string{SLIPSTREAM_VERIFICATION_DIR} +
-            "/received_trades.csv";
+        const std::string received_quotes_path = std::string{SLIPSTREAM_VERIFICATION_DIR} + "/received_quotes.csv";
+        const std::string received_trades_path = std::string{SLIPSTREAM_VERIFICATION_DIR} + "/received_trades.csv";
 
-        md_observer = std::make_unique<CanonicalFileEventObserver>(
-            received_quotes_path.c_str());
-        oe_observer = std::make_unique<CanonicalFileEventObserver>(
-            received_trades_path.c_str());
+        md_observer = std::make_unique<CanonicalFileEventObserver>(received_quotes_path.c_str());
+        oe_observer = std::make_unique<CanonicalFileEventObserver>(received_trades_path.c_str());
     }
 
     md_listener.SetReuseAddress();
@@ -122,7 +110,8 @@ void TcpPollServerTransport::Run() {
             }
             const int ready = ::poll(poll_fds.data(), poll_fds.size(), 1000);
             if (ready == -1) {
-                if (errno == EINTR) continue;
+                if (errno == EINTR)
+                    continue;
                 throw std::system_error(errno, std::generic_category(), "poll() failed");
             }
             for (const auto& descriptor : poll_fds) {
@@ -133,7 +122,8 @@ void TcpPollServerTransport::Run() {
             if (poll_fds[wake_index].revents & POLLIN) {
                 resetWakeNotif();
             }
-            if (!alive.load(std::memory_order_acquire)) break;
+            if (!alive.load(std::memory_order_acquire))
+                break;
         }
         drainEgress();
         if (!send_queue.empty()) {
@@ -164,27 +154,21 @@ void TcpPollServerTransport::Stop() {
     NotifyOutboundReady();
 }
 
-void TcpPollServerTransport::recvMarketEvent(
-    utils::Socket<utils::SockType::Tcp>& client,
-    codec::MarketEventDecoder& decoder,
-    IEventObserver* observer) {
+void TcpPollServerTransport::recvMarketEvent(utils::Socket<utils::SockType::Tcp>& client,
+                                             codec::MarketEventDecoder& decoder, IEventObserver* observer) {
     std::array<std::byte, 4096> recv_buffer;
 
     while (true) {
         const ::ssize_t recvd = client.Recv(recv_buffer);
         if (recvd > 0) {
             const std::uint64_t received_at_ns = MonotonicNowNs();
-            const std::span<const std::byte> received_bytes{
-                recv_buffer.data(),
-                static_cast<std::size_t>(recvd)};
+            const std::span<const std::byte> received_bytes{recv_buffer.data(), static_cast<std::size_t>(recvd)};
 
             std::vector<MarketEvent> recv_messages;
-            const auto result = decoder.Decode(received_bytes,recv_messages);
+            const auto result = decoder.Decode(received_bytes, recv_messages);
 
             for (auto& recv_message : recv_messages) {
-                if (std::strcmp(
-                        recv_message.symbol,
-                        config_.symbol.c_str()) != 0) [[likely]] {
+                if (std::strcmp(recv_message.symbol, config_.symbol.c_str()) != 0) [[likely]] {
                     continue;
                 }
 
@@ -198,8 +182,7 @@ void TcpPollServerTransport::recvMarketEvent(
                         .received_at_ns = received_at_ns,
                     };
                     if (!ingress->push(inbound)) [[unlikely]] {
-                        throw std::runtime_error(
-                            "failed to enqueue MarketEvent");
+                        throw std::runtime_error("failed to enqueue MarketEvent");
                     }
 
                     if (config_.execution_mode == ExecutionMode::Wait) {
@@ -214,12 +197,10 @@ void TcpPollServerTransport::recvMarketEvent(
             }
 
             if (result.status == codec::DecodeStatus::buffer_overflow) {
-                throw std::runtime_error(
-                    "server inbound decoder buffer overflow");
+                throw std::runtime_error("server inbound decoder buffer overflow");
             }
             if (result.status == codec::DecodeStatus::error) {
-                throw std::runtime_error(
-                    "invalid server inbound frame");
+                throw std::runtime_error("invalid server inbound frame");
             }
 
             continue;
@@ -236,23 +217,18 @@ void TcpPollServerTransport::recvMarketEvent(
             return;
         }
 
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "market-data recv() failed");
+        throw std::system_error(errno, std::generic_category(), "market-data recv() failed");
     }
 }
 
-void TcpPollServerTransport::recvSessionControl(
-    utils::Socket<utils::SockType::Udp>& client) {
+void TcpPollServerTransport::recvSessionControl(utils::Socket<utils::SockType::Udp>& client) {
     std::array<std::byte, 64> recv_buffer;
 
     while (true) {
         const ::ssize_t recvd = client.RecvDatagram(recv_buffer);
         if (recvd > 0) {
-            const std::string_view command{
-                reinterpret_cast<const char*>(recv_buffer.data()),
-                static_cast<std::size_t>(recvd)};
+            const std::string_view command{reinterpret_cast<const char*>(recv_buffer.data()),
+                                           static_cast<std::size_t>(recvd)};
 
             if (command == "HALT") {
                 queueSessionControl(codec::SessionState::halt);
@@ -277,19 +253,19 @@ void TcpPollServerTransport::recvSessionControl(
             return;
         }
 
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "session-control recv() failed");
+        throw std::system_error(errno, std::generic_category(), "session-control recv() failed");
     }
 }
 
 void TcpPollServerTransport::NotifyOutboundReady() {
-    if (wake_fd == -1) return;
+    if (wake_fd == -1)
+        return;
     const std::uint64_t signal = 1;
     while (::write(wake_fd, &signal, sizeof(signal)) == -1) {
-        if (errno == EINTR) continue;
-        if (errno == EAGAIN) return;
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN)
+            return;
         throw std::system_error(errno, std::generic_category(), "failed to signal eventfd");
     }
 }
@@ -297,8 +273,10 @@ void TcpPollServerTransport::NotifyOutboundReady() {
 void TcpPollServerTransport::resetWakeNotif() {
     std::uint64_t count{};
     while (::read(wake_fd, &count, sizeof(count)) == -1) {
-        if (errno == EINTR) continue;
-        if (errno == EAGAIN) return;
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN)
+            return;
         throw std::system_error(errno, std::generic_category(), "failed to read eventfd");
     }
 }
@@ -311,27 +289,21 @@ void TcpPollServerTransport::drainEgress() {
     OutboundMessage outbound{};
     while (egress->pop(outbound)) {
         EncodedFrame frame{};
-        frame.trigger_received_at_ns =
-            outbound.trigger_received_at_ns;
+        frame.trigger_received_at_ns = outbound.trigger_received_at_ns;
         frame.trade_id = outbound.trade_id;
-        frame.measure_tick_to_order =
-            outbound.measure_tick_to_order;
+        frame.measure_tick_to_order = outbound.measure_tick_to_order;
 
         std::visit(
             [&frame](const auto& value) {
                 using Message = std::decay_t<decltype(value)>;
 
-                if constexpr (
-                    std::is_same_v<Message, codec::NewOrderMessage>) {
+                if constexpr (std::is_same_v<Message, codec::NewOrderMessage>) {
                     frame.size = codec::EncodeNewOrder(value, frame.bytes);
-                } else if constexpr (
-                    std::is_same_v<Message, codec::ExecReportMessage>) {
+                } else if constexpr (std::is_same_v<Message, codec::ExecReportMessage>) {
                     frame.size = codec::EncodeExecReport(value, frame.bytes);
-                } else if constexpr (
-                    std::is_same_v<Message, codec::HeartbeatMessage>) {
+                } else if constexpr (std::is_same_v<Message, codec::HeartbeatMessage>) {
                     frame.size = codec::EncodeHeartbeat(value, frame.bytes);
-                } else if constexpr (
-                    std::is_same_v<Message, codec::SessionControlMessage>) {
+                } else if constexpr (std::is_same_v<Message, codec::SessionControlMessage>) {
                     frame.size = codec::EncodeSessionControl(value, frame.bytes);
                 }
             },
@@ -341,23 +313,18 @@ void TcpPollServerTransport::drainEgress() {
     }
 }
 
-void TcpPollServerTransport::flushSendQueue(
-    utils::Socket<utils::SockType::Tcp>& oe_client) {
+void TcpPollServerTransport::flushSendQueue(utils::Socket<utils::SockType::Tcp>& oe_client) {
     while (!send_queue.empty()) {
         EncodedFrame& frame = send_queue.front();
         const std::uint64_t send_started_at_ns = MonotonicNowNs();
-        if (oe_client.SendAll(frame.remainingBytes()) ==
-            utils::ConnectionResult::PeerDisconnected) {
+        if (oe_client.SendAll(frame.remainingBytes()) == utils::ConnectionResult::PeerDisconnected) {
             alive.store(false, std::memory_order_release);
             return;
         }
 
         if (frame.measure_tick_to_order) {
             if (send_started_at_ns >= frame.trigger_received_at_ns) {
-                tick_to_order_histogram.Record(
-                    frame.trigger_received_at_ns,
-                    send_started_at_ns,
-                    frame.trade_id);
+                tick_to_order_histogram.Record(frame.trigger_received_at_ns, send_started_at_ns, frame.trade_id);
             }
         }
 
@@ -365,13 +332,11 @@ void TcpPollServerTransport::flushSendQueue(
     }
 }
 
-TickToOrderStatistics
-TcpPollServerTransport::GetTickToOrderStatistics() const noexcept {
+TickToOrderStatistics TcpPollServerTransport::GetTickToOrderStatistics() const noexcept {
     return tick_to_order_histogram.GetStatistics();
 }
 
-const TickToOrderHistogram&
-TcpPollServerTransport::GetTickToOrderHistogram() const noexcept {
+const TickToOrderHistogram& TcpPollServerTransport::GetTickToOrderHistogram() const noexcept {
     return tick_to_order_histogram;
 }
 
@@ -390,25 +355,17 @@ void TcpPollServerTransport::checkHeartbeat() {
         return;
     }
 
-    const auto silent_seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(
-            now - last_oe_activity)
-            .count();
+    const auto silent_seconds = std::chrono::duration_cast<std::chrono::seconds>(now - last_oe_activity).count();
 
-    spdlog::warn(
-        "OE client has been silent for {} seconds; sending heartbeat",
-        silent_seconds);
+    spdlog::warn("OE client has been silent for {} seconds; sending heartbeat", silent_seconds);
 
     queueHeartbeat();
     next_heartbeat = now + heartbeat_interval;
 }
 
 void TcpPollServerTransport::queueHeartbeat() {
-    const auto unix_time =
-        std::chrono::system_clock::now().time_since_epoch();
-    const auto timestamp_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time)
-            .count();
+    const auto unix_time = std::chrono::system_clock::now().time_since_epoch();
+    const auto timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time).count();
 
     const codec::HeartbeatMessage heartbeat{
         .ts_ns = static_cast<std::uint64_t>(timestamp_ns),
@@ -419,23 +376,15 @@ void TcpPollServerTransport::queueHeartbeat() {
     send_queue.push_back(std::move(frame));
 }
 
-void TcpPollServerTransport::queueSessionControl(
-    codec::SessionState state) {
-    const auto unix_time =
-        std::chrono::system_clock::now().time_since_epoch();
-    const auto timestamp_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time)
-            .count();
+void TcpPollServerTransport::queueSessionControl(codec::SessionState state) {
+    const auto unix_time = std::chrono::system_clock::now().time_since_epoch();
+    const auto timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time).count();
 
-    const codec::SessionControlMessage session_control{
-        .ts_ns = static_cast<std::uint64_t>(timestamp_ns),
-        .state = state
-    };
+    const codec::SessionControlMessage session_control{.ts_ns = static_cast<std::uint64_t>(timestamp_ns),
+                                                       .state = state};
 
     EncodedFrame frame{};
-    frame.size = codec::EncodeSessionControl(
-        session_control,
-        frame.bytes);
+    frame.size = codec::EncodeSessionControl(session_control, frame.bytes);
     send_queue.push_back(std::move(frame));
 }
 

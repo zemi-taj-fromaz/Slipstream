@@ -11,12 +11,8 @@ constexpr std::size_t expected_order_count = 5'000;
 
 }
 
-OeLatencyRecorder::OeLatencyRecorder(
-    std::string transport,
-    std::string output_path,
-    std::string execution_mode)
-    : transport_{std::move(transport)},
-      output_path_{std::move(output_path)},
+OeLatencyRecorder::OeLatencyRecorder(std::string transport, std::string output_path, std::string execution_mode)
+    : transport_{std::move(transport)}, output_path_{std::move(output_path)},
       execution_mode_{std::move(execution_mode)} {
     pending_sends_.reserve(expected_order_count);
     samples_.reserve(expected_order_count);
@@ -31,9 +27,7 @@ void OeLatencyRecorder::RecordSend(const std::int64_t trade_id) {
     entry->second = NowNs();
 }
 
-void OeLatencyRecorder::RecordConfirmation(
-    const std::int64_t trade_id,
-    const char status) {
+void OeLatencyRecorder::RecordConfirmation(const std::int64_t trade_id, const char status) {
     const std::uint64_t receive_ns = NowNs();
     const auto entry = pending_sends_.find(trade_id);
     if (entry == pending_sends_.end()) {
@@ -59,14 +53,8 @@ void OeLatencyRecorder::WriteCsv() const {
 
     output << "transport,execution_mode,trade_id,status,send_ns,receive_ns,latency_ns\n";
     for (const Sample& sample : samples_) {
-        output
-            << transport_ << ','
-            << execution_mode_ << ','
-            << sample.trade_id << ','
-            << sample.status << ','
-            << sample.send_ns << ','
-            << sample.receive_ns << ','
-            << sample.latency_ns << '\n';
+        output << transport_ << ',' << execution_mode_ << ',' << sample.trade_id << ',' << sample.status << ','
+               << sample.send_ns << ',' << sample.receive_ns << ',' << sample.latency_ns << '\n';
     }
 
     if (!output) {
@@ -84,7 +72,6 @@ const std::string& OeLatencyRecorder::OutputPath() const noexcept {
 
 std::uint64_t OeLatencyRecorder::NowNs() noexcept {
     return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
             .count());
 }

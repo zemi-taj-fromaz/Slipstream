@@ -14,8 +14,7 @@ TEST(ExecutionReport, CalculatesNearestRankTickToOrderPercentiles) {
         samples.push_back(sample);
     }
 
-    const TickToOrderStatistics statistics =
-        CalculateTickToOrderStatistics(samples);
+    const TickToOrderStatistics statistics = CalculateTickToOrderStatistics(samples);
 
     EXPECT_EQ(statistics.p50_ns, 500U);
     EXPECT_EQ(statistics.p99_ns, 990U);
@@ -32,21 +31,12 @@ TEST(ExecutionReport, FormatsTickToOrderStatisticsInMicroseconds) {
         .sample_count = 100,
     };
 
-    const std::string output =
-        FormatExecutionReport(report, SlipstreamConfig{});
+    const std::string output = FormatExecutionReport(report, SlipstreamConfig{});
 
-    EXPECT_NE(
-        output.find("tick-to-order p50   1.900 us"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("tick-to-order p99   6.400 us"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("tick-to-order p99.9 21.700 us"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("latency samples     100"),
-        std::string::npos);
+    EXPECT_NE(output.find("tick-to-order p50   1.900 us"), std::string::npos);
+    EXPECT_NE(output.find("tick-to-order p99   6.400 us"), std::string::npos);
+    EXPECT_NE(output.find("tick-to-order p99.9 21.700 us"), std::string::npos);
+    EXPECT_NE(output.find("latency samples     100"), std::string::npos);
 }
 
 TEST(ExecutionReport, AggregatesTickToOrderHistogram) {
@@ -75,19 +65,14 @@ TEST(ExecutionReport, WritesRawTickToOrderCsv) {
     EXPECT_NE(output.str().find("transport,execution_mode,trade_id"), std::string::npos);
     EXPECT_NE(output.str().find("tcp,engine_probe,42,1000,1375,375"), std::string::npos);
 
-    EXPECT_NE(
-        output.str().find("42,1000,1375,375"),
-        std::string::npos);
+    EXPECT_NE(output.str().find("42,1000,1375,375"), std::string::npos);
 }
 
 TEST(ExecutionReport, FormatsBuyOnlySession) {
     ExecutionReport report{
-        .market_pq_sum =
-            static_cast<__int128_t>(1'012'701) * 400'000,
-        .executed_pq_sum =
-            static_cast<__int128_t>(1'012'438) * 47'300,
-        .buy_pq_sum =
-            static_cast<__int128_t>(1'012'438) * 47'300,
+        .market_pq_sum = static_cast<__int128_t>(1'012'701) * 400'000,
+        .executed_pq_sum = static_cast<__int128_t>(1'012'438) * 47'300,
+        .buy_pq_sum = static_cast<__int128_t>(1'012'438) * 47'300,
         .sell_pq_sum = 0,
         .market_qty = 400'000,
         .submitted_qty = 50'000,
@@ -99,32 +84,20 @@ TEST(ExecutionReport, FormatsBuyOnlySession) {
     config.symbol = "SYNTH1";
     config.participation_cap = 0.15;
 
-    const std::string output =
-        FormatExecutionReport(report, config);
+    const std::string output = FormatExecutionReport(report, config);
 
-    EXPECT_NE(
-        output.find("executed qty        47300   (94.60%)"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("avg fill price      101.2438"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("session VWAP        101.2701"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("slippage vs VWAP    -2.60 bps   (favorable)"),
-        std::string::npos);
+    EXPECT_NE(output.find("executed qty        47300   (94.60%)"), std::string::npos);
+    EXPECT_NE(output.find("avg fill price      101.2438"), std::string::npos);
+    EXPECT_NE(output.find("session VWAP        101.2701"), std::string::npos);
+    EXPECT_NE(output.find("slippage vs VWAP    -2.60 bps   (favorable)"), std::string::npos);
 }
 
 TEST(ExecutionReport, TreatsSellAboveVwapAsFavorable) {
     ExecutionReport report{
-        .market_pq_sum =
-            static_cast<__int128_t>(1'000'000) * 10'000,
-        .executed_pq_sum =
-            static_cast<__int128_t>(1'010'000) * 100,
+        .market_pq_sum = static_cast<__int128_t>(1'000'000) * 10'000,
+        .executed_pq_sum = static_cast<__int128_t>(1'010'000) * 100,
         .buy_pq_sum = 0,
-        .sell_pq_sum =
-            static_cast<__int128_t>(1'010'000) * 100,
+        .sell_pq_sum = static_cast<__int128_t>(1'010'000) * 100,
         .market_qty = 10'000,
         .submitted_qty = 100,
         .executed_qty = 100,
@@ -133,31 +106,19 @@ TEST(ExecutionReport, TreatsSellAboveVwapAsFavorable) {
     };
     SlipstreamConfig config{};
 
-    const std::string output =
-        FormatExecutionReport(report, config);
+    const std::string output = FormatExecutionReport(report, config);
 
-    EXPECT_NE(
-        output.find("slippage vs VWAP    -100.00 bps   (favorable)"),
-        std::string::npos);
+    EXPECT_NE(output.find("slippage vs VWAP    -100.00 bps   (favorable)"), std::string::npos);
 }
 
 TEST(ExecutionReport, HandlesEmptySession) {
     const ExecutionReport report{};
     const SlipstreamConfig config{};
 
-    const std::string output =
-        FormatExecutionReport(report, config);
+    const std::string output = FormatExecutionReport(report, config);
 
-    EXPECT_NE(
-        output.find("executed qty        0   (0.00%)"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("avg fill price      0.0000"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("session VWAP        0.0000"),
-        std::string::npos);
-    EXPECT_NE(
-        output.find("slippage vs VWAP    0.00 bps   (neutral)"),
-        std::string::npos);
+    EXPECT_NE(output.find("executed qty        0   (0.00%)"), std::string::npos);
+    EXPECT_NE(output.find("avg fill price      0.0000"), std::string::npos);
+    EXPECT_NE(output.find("session VWAP        0.0000"), std::string::npos);
+    EXPECT_NE(output.find("slippage vs VWAP    0.00 bps   (neutral)"), std::string::npos);
 }

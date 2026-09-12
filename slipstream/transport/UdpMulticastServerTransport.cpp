@@ -27,30 +27,21 @@ namespace {
 
 std::uint64_t MonotonicNowNs() noexcept {
     return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
             .count());
 }
 
 }
 
-UdpMulticastServerTransport::UdpMulticastServerTransport(
-    const SlipstreamConfig& config)
-    : config_{config},
-      wake_fd{::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)} {
+UdpMulticastServerTransport::UdpMulticastServerTransport(const SlipstreamConfig& config)
+    : config_{config}, wake_fd{::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)} {
     if (wake_fd == -1) {
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "eventfd() failed");
+        throw std::system_error(errno, std::generic_category(), "eventfd() failed");
     }
 }
 
-UdpMulticastServerTransport::UdpMulticastServerTransport(
-    const SlipstreamConfig& config,
-    MarketEventQueue& in,
-    OrderEntryQueue& out,
-    std::atomic<std::uint64_t>& generation)
+UdpMulticastServerTransport::UdpMulticastServerTransport(const SlipstreamConfig& config, MarketEventQueue& in,
+                                                         OrderEntryQueue& out, std::atomic<std::uint64_t>& generation)
     : UdpMulticastServerTransport(config) {
     ingress = &in;
     egress = &out;
@@ -71,32 +62,22 @@ void UdpMulticastServerTransport::Run() {
     std::unique_ptr<IEventObserver> oe_observer;
 
     if (utils::ReplayVerificationEnabled()) {
-        const std::string received_quotes_path =
-            std::string{SLIPSTREAM_VERIFICATION_DIR} +
-            "/received_quotes.csv";
-        const std::string received_trades_path =
-            std::string{SLIPSTREAM_VERIFICATION_DIR} +
-            "/received_trades.csv";
+        const std::string received_quotes_path = std::string{SLIPSTREAM_VERIFICATION_DIR} + "/received_quotes.csv";
+        const std::string received_trades_path = std::string{SLIPSTREAM_VERIFICATION_DIR} + "/received_trades.csv";
 
-        md_observer = std::make_unique<CanonicalFileEventObserver>(
-            received_quotes_path.c_str());
-        oe_observer = std::make_unique<CanonicalFileEventObserver>(
-            received_trades_path.c_str());
+        md_observer = std::make_unique<CanonicalFileEventObserver>(received_quotes_path.c_str());
+        oe_observer = std::make_unique<CanonicalFileEventObserver>(received_trades_path.c_str());
     }
 
     md_feed_a.SetReuseAddress();
     md_feed_a.SetReceiveBufferSize(receive_buffer_size);
     md_feed_a.Bind(config_.md_a_port);
-    md_feed_a.JoinMulticastGroup(
-        config_.md_a_group.c_str(),
-        config_.md_multicast_interface.c_str());
+    md_feed_a.JoinMulticastGroup(config_.md_a_group.c_str(), config_.md_multicast_interface.c_str());
 
     md_feed_b.SetReuseAddress();
     md_feed_b.SetReceiveBufferSize(receive_buffer_size);
     md_feed_b.Bind(config_.md_b_port);
-    md_feed_b.JoinMulticastGroup(
-        config_.md_b_group.c_str(),
-        config_.md_multicast_interface.c_str());
+    md_feed_b.JoinMulticastGroup(config_.md_b_group.c_str(), config_.md_multicast_interface.c_str());
 
     oe_listener.SetReuseAddress();
     oe_listener.SetReceiveBufferSize(receive_buffer_size);
@@ -120,29 +101,27 @@ void UdpMulticastServerTransport::Run() {
     constexpr std::size_t wake_index = 3;
     constexpr std::size_t session_control_index = 4;
 
-    std::array<pollfd, 5> poll_fds{{
-        {.fd = md_feed_a.NativeHandle(), .events = POLLIN, .revents = 0},
-        {.fd = md_feed_b.NativeHandle(), .events = POLLIN, .revents = 0},
-        {.fd = oe_client.NativeHandle(), .events = POLLIN, .revents = 0},
-        {.fd = wake_fd, .events = POLLIN, .revents = 0},
-        {
-            .fd = session_control_listener.NativeHandle(),
-            .events = POLLIN,
-            .revents = 0
-        }
-    }};
+    std::array<pollfd, 5> poll_fds{{{.fd = md_feed_a.NativeHandle(), .events = POLLIN, .revents = 0},
+                                    {.fd = md_feed_b.NativeHandle(), .events = POLLIN, .revents = 0},
+                                    {.fd = oe_client.NativeHandle(), .events = POLLIN, .revents = 0},
+                                    {.fd = wake_fd, .events = POLLIN, .revents = 0},
+                                    {.fd = session_control_listener.NativeHandle(), .events = POLLIN, .revents = 0}}};
 
     while (alive.load(std::memory_order_acquire)) {
         if (config_.execution_mode != ExecutionMode::Wait) {
             drainEgress();
             flushSendQueue(oe_client);
-            if (!alive.load(std::memory_order_acquire)) break;
+            if (!alive.load(std::memory_order_acquire))
+                break;
             recvMulticastMarketData(md_feed_a, md_observer.get());
-            if (!alive.load(std::memory_order_acquire)) break;
+            if (!alive.load(std::memory_order_acquire))
+                break;
             recvMulticastMarketData(md_feed_b, md_observer.get());
-            if (!alive.load(std::memory_order_acquire)) break;
+            if (!alive.load(std::memory_order_acquire))
+                break;
             recvOrderEntry(oe_client, oe_observer.get());
-            if (!alive.load(std::memory_order_acquire)) break;
+            if (!alive.load(std::memory_order_acquire))
+                break;
             recvSessionControl(session_control_listener);
             checkHeartbeat();
             continue;
@@ -162,20 +141,14 @@ void UdpMulticastServerTransport::Run() {
         }
 
         constexpr std::int32_t poll_timeout_ms = 1000;
-        const int ready = ::poll(
-            poll_fds.data(),
-            static_cast<nfds_t>(poll_fds.size()),
-            poll_timeout_ms);
+        const int ready = ::poll(poll_fds.data(), static_cast<nfds_t>(poll_fds.size()), poll_timeout_ms);
 
         if (ready == -1) {
             if (errno == EINTR) {
                 continue;
             }
 
-            throw std::system_error(
-                errno,
-                std::generic_category(),
-                "poll() failed");
+            throw std::system_error(errno, std::generic_category(), "poll() failed");
         }
 
         if (poll_fds[wake_index].revents & POLLIN) {
@@ -207,56 +180,36 @@ void UdpMulticastServerTransport::Stop() {
     NotifyOutboundReady();
 }
 
-void UdpMulticastServerTransport::recvMulticastMarketData(
-    utils::UdpSocket& feed,
-    IEventObserver* observer) {
-    std::array<
-        std::byte,
-        codec::max_multicast_datagram_size + 1> recv_buffer{};
+void UdpMulticastServerTransport::recvMulticastMarketData(utils::UdpSocket& feed, IEventObserver* observer) {
+    std::array<std::byte, codec::max_multicast_datagram_size + 1> recv_buffer{};
 
     while (true) {
         const ::ssize_t received = feed.RecvDatagram(recv_buffer);
         if (received > 0) {
-            const std::span<const std::byte> received_bytes{
-                recv_buffer.data(),
-                static_cast<std::size_t>(received)};
+            const std::span<const std::byte> received_bytes{recv_buffer.data(), static_cast<std::size_t>(received)};
 
             codec::MulticastMarketDataDatagram datagram{};
             const codec::MulticastDecodeResult result =
-                codec::DecodeMulticastMarketData(
-                    received_bytes,
-                    expected_sequence,
-                    datagram);
+                codec::DecodeMulticastMarketData(received_bytes, expected_sequence, datagram);
 
-            if (result.status ==
-                codec::MulticastDecodeStatus::duplicate) {
+            if (result.status == codec::MulticastDecodeStatus::duplicate) {
                 return;
             }
-            if (result.status ==
-                codec::MulticastDecodeStatus::sequence_gap) {
-                throw std::runtime_error(
-                    "multicast sequence gap: expected " +
-                    std::to_string(expected_sequence) +
-                    ", received " +
-                    std::to_string(result.sequence));
+            if (result.status == codec::MulticastDecodeStatus::sequence_gap) {
+                throw std::runtime_error("multicast sequence gap: expected " + std::to_string(expected_sequence) +
+                                         ", received " + std::to_string(result.sequence));
             }
-            if (result.status !=
-                codec::MulticastDecodeStatus::message_ready) {
-                throw std::runtime_error(
-                    "invalid multicast market-data datagram");
+            if (result.status != codec::MulticastDecodeStatus::message_ready) {
+                throw std::runtime_error("invalid multicast market-data datagram");
             }
 
-            processMulticastMarketData(
-                datagram,
-                MonotonicNowNs(),
-                observer);
+            processMulticastMarketData(datagram, MonotonicNowNs(), observer);
             ++expected_sequence;
             return;
         }
 
         if (received == 0) {
-            throw std::runtime_error(
-                "empty multicast market-data datagram");
+            throw std::runtime_error("empty multicast market-data datagram");
         }
         if (errno == EINTR) {
             continue;
@@ -265,25 +218,17 @@ void UdpMulticastServerTransport::recvMulticastMarketData(
             return;
         }
 
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "multicast market-data recv() failed");
+        throw std::system_error(errno, std::generic_category(), "multicast market-data recv() failed");
     }
 }
 
-void UdpMulticastServerTransport::processMulticastMarketData(
-    const codec::MulticastMarketDataDatagram& datagram,
-    std::uint64_t received_at_ns,
-    IEventObserver* observer) {
+void UdpMulticastServerTransport::processMulticastMarketData(const codec::MulticastMarketDataDatagram& datagram,
+                                                             std::uint64_t received_at_ns, IEventObserver* observer) {
     if (!std::holds_alternative<Quote>(datagram.event.payload)) {
-        throw std::runtime_error(
-            "multicast market-data feed received a non-quote event");
+        throw std::runtime_error("multicast market-data feed received a non-quote event");
     }
 
-    if (std::strcmp(
-            datagram.event.symbol,
-            config_.symbol.c_str()) != 0) [[likely]] {
+    if (std::strcmp(datagram.event.symbol, config_.symbol.c_str()) != 0) [[likely]] {
         return;
     }
 
@@ -293,8 +238,7 @@ void UdpMulticastServerTransport::processMulticastMarketData(
             .received_at_ns = received_at_ns,
         };
         if (!ingress->push(inbound)) [[unlikely]] {
-            throw std::runtime_error(
-                "failed to enqueue MarketEvent");
+            throw std::runtime_error("failed to enqueue MarketEvent");
         }
 
         if (config_.execution_mode == ExecutionMode::Wait) {
@@ -308,33 +252,24 @@ void UdpMulticastServerTransport::processMulticastMarketData(
     }
 }
 
-void UdpMulticastServerTransport::recvOrderEntry(
-    utils::TcpSocket& client,
-    IEventObserver* observer) {
+void UdpMulticastServerTransport::recvOrderEntry(utils::TcpSocket& client, IEventObserver* observer) {
     std::array<std::byte, 4096> recv_buffer{};
 
     while (true) {
         const ::ssize_t received = client.Recv(recv_buffer);
         if (received > 0) {
             const std::uint64_t received_at_ns = MonotonicNowNs();
-            const std::span<const std::byte> received_bytes{
-                recv_buffer.data(),
-                static_cast<std::size_t>(received)};
+            const std::span<const std::byte> received_bytes{recv_buffer.data(), static_cast<std::size_t>(received)};
 
             std::vector<MarketEvent> recv_messages;
-            const auto result = oe_decoder.Decode(
-                received_bytes,
-                recv_messages);
+            const auto result = oe_decoder.Decode(received_bytes, recv_messages);
 
             for (const MarketEvent& recv_message : recv_messages) {
-                if (std::strcmp(
-                        recv_message.symbol,
-                        config_.symbol.c_str()) != 0) [[likely]] {
+                if (std::strcmp(recv_message.symbol, config_.symbol.c_str()) != 0) [[likely]] {
                     continue;
                 }
 
-                if (std::holds_alternative<Trade>(
-                        recv_message.payload)) {
+                if (std::holds_alternative<Trade>(recv_message.payload)) {
                     markOeActivity();
                 }
 
@@ -344,8 +279,7 @@ void UdpMulticastServerTransport::recvOrderEntry(
                         .received_at_ns = received_at_ns,
                     };
                     if (!ingress->push(inbound)) [[unlikely]] {
-                        throw std::runtime_error(
-                            "failed to enqueue MarketEvent");
+                        throw std::runtime_error("failed to enqueue MarketEvent");
                     }
 
                     if (config_.execution_mode == ExecutionMode::Wait) {
@@ -360,12 +294,10 @@ void UdpMulticastServerTransport::recvOrderEntry(
             }
 
             if (result.status == codec::DecodeStatus::buffer_overflow) {
-                throw std::runtime_error(
-                    "order-entry decoder buffer overflow");
+                throw std::runtime_error("order-entry decoder buffer overflow");
             }
             if (result.status == codec::DecodeStatus::error) {
-                throw std::runtime_error(
-                    "invalid order-entry inbound frame");
+                throw std::runtime_error("invalid order-entry inbound frame");
             }
 
             continue;
@@ -382,23 +314,18 @@ void UdpMulticastServerTransport::recvOrderEntry(
             return;
         }
 
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "order-entry recv() failed");
+        throw std::system_error(errno, std::generic_category(), "order-entry recv() failed");
     }
 }
 
-void UdpMulticastServerTransport::recvSessionControl(
-    utils::UdpSocket& client) {
+void UdpMulticastServerTransport::recvSessionControl(utils::UdpSocket& client) {
     std::array<std::byte, 64> recv_buffer{};
 
     while (true) {
         const ::ssize_t received = client.RecvDatagram(recv_buffer);
         if (received > 0) {
-            const std::string_view command{
-                reinterpret_cast<const char*>(recv_buffer.data()),
-                static_cast<std::size_t>(received)};
+            const std::string_view command{reinterpret_cast<const char*>(recv_buffer.data()),
+                                           static_cast<std::size_t>(received)};
 
             if (command == "HALT") {
                 queueSessionControl(codec::SessionState::halt);
@@ -423,22 +350,17 @@ void UdpMulticastServerTransport::recvSessionControl(
             return;
         }
 
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "session-control recv() failed");
+        throw std::system_error(errno, std::generic_category(), "session-control recv() failed");
     }
 }
 
 void UdpMulticastServerTransport::NotifyOutboundReady() {
-    if (config_.execution_mode != ExecutionMode::Wait) return;
+    if (config_.execution_mode != ExecutionMode::Wait)
+        return;
     const std::uint64_t signal = 1;
 
     while (true) {
-        const ::ssize_t result = ::write(
-            wake_fd,
-            &signal,
-            sizeof(signal));
+        const ::ssize_t result = ::write(wake_fd, &signal, sizeof(signal));
 
         if (result == sizeof(signal)) {
             return;
@@ -450,10 +372,7 @@ void UdpMulticastServerTransport::NotifyOutboundReady() {
             return;
         }
 
-        throw std::system_error(
-            errno,
-            std::generic_category(),
-            "failed to signal eventfd");
+        throw std::system_error(errno, std::generic_category(), "failed to signal eventfd");
     }
 }
 
@@ -465,30 +384,22 @@ void UdpMulticastServerTransport::drainEgress() {
     OutboundMessage outbound{};
     while (egress->pop(outbound)) {
         EncodedFrame frame{};
-        frame.trigger_received_at_ns =
-            outbound.trigger_received_at_ns;
+        frame.trigger_received_at_ns = outbound.trigger_received_at_ns;
         frame.trade_id = outbound.trade_id;
-        frame.measure_tick_to_order =
-            outbound.measure_tick_to_order;
+        frame.measure_tick_to_order = outbound.measure_tick_to_order;
 
         std::visit(
             [&frame](const auto& value) {
                 using Message = std::decay_t<decltype(value)>;
 
-                if constexpr (
-                    std::is_same_v<Message, codec::NewOrderMessage>) {
+                if constexpr (std::is_same_v<Message, codec::NewOrderMessage>) {
                     frame.size = codec::EncodeNewOrder(value, frame.bytes);
-                } else if constexpr (
-                    std::is_same_v<Message, codec::ExecReportMessage>) {
+                } else if constexpr (std::is_same_v<Message, codec::ExecReportMessage>) {
                     frame.size = codec::EncodeExecReport(value, frame.bytes);
-                } else if constexpr (
-                    std::is_same_v<Message, codec::HeartbeatMessage>) {
+                } else if constexpr (std::is_same_v<Message, codec::HeartbeatMessage>) {
                     frame.size = codec::EncodeHeartbeat(value, frame.bytes);
-                } else if constexpr (
-                    std::is_same_v<Message, codec::SessionControlMessage>) {
-                    frame.size = codec::EncodeSessionControl(
-                        value,
-                        frame.bytes);
+                } else if constexpr (std::is_same_v<Message, codec::SessionControlMessage>) {
+                    frame.size = codec::EncodeSessionControl(value, frame.bytes);
                 }
             },
             outbound.message);
@@ -497,36 +408,28 @@ void UdpMulticastServerTransport::drainEgress() {
     }
 }
 
-void UdpMulticastServerTransport::flushSendQueue(
-    utils::TcpSocket& oe_client) {
+void UdpMulticastServerTransport::flushSendQueue(utils::TcpSocket& oe_client) {
     while (!send_queue.empty()) {
         EncodedFrame& frame = send_queue.front();
         const std::uint64_t send_started_at_ns = MonotonicNowNs();
-        if (oe_client.SendAll(frame.remainingBytes()) ==
-            utils::ConnectionResult::PeerDisconnected) {
+        if (oe_client.SendAll(frame.remainingBytes()) == utils::ConnectionResult::PeerDisconnected) {
             alive.store(false, std::memory_order_release);
             return;
         }
 
-        if (frame.measure_tick_to_order &&
-            send_started_at_ns >= frame.trigger_received_at_ns) {
-            tick_to_order_histogram.Record(
-                frame.trigger_received_at_ns,
-                send_started_at_ns,
-                frame.trade_id);
+        if (frame.measure_tick_to_order && send_started_at_ns >= frame.trigger_received_at_ns) {
+            tick_to_order_histogram.Record(frame.trigger_received_at_ns, send_started_at_ns, frame.trade_id);
         }
 
         send_queue.pop_front();
     }
 }
 
-TickToOrderStatistics
-UdpMulticastServerTransport::GetTickToOrderStatistics() const noexcept {
+TickToOrderStatistics UdpMulticastServerTransport::GetTickToOrderStatistics() const noexcept {
     return tick_to_order_histogram.GetStatistics();
 }
 
-const TickToOrderHistogram&
-UdpMulticastServerTransport::GetTickToOrderHistogram() const noexcept {
+const TickToOrderHistogram& UdpMulticastServerTransport::GetTickToOrderHistogram() const noexcept {
     return tick_to_order_histogram;
 }
 
@@ -545,25 +448,17 @@ void UdpMulticastServerTransport::checkHeartbeat() {
         return;
     }
 
-    const auto silent_seconds =
-        std::chrono::duration_cast<std::chrono::seconds>(
-            now - last_oe_activity)
-            .count();
+    const auto silent_seconds = std::chrono::duration_cast<std::chrono::seconds>(now - last_oe_activity).count();
 
-    spdlog::warn(
-        "OE client has been silent for {} seconds; sending heartbeat",
-        silent_seconds);
+    spdlog::warn("OE client has been silent for {} seconds; sending heartbeat", silent_seconds);
 
     queueHeartbeat();
     next_heartbeat = now + heartbeat_interval;
 }
 
 void UdpMulticastServerTransport::queueHeartbeat() {
-    const auto unix_time =
-        std::chrono::system_clock::now().time_since_epoch();
-    const auto timestamp_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time)
-            .count();
+    const auto unix_time = std::chrono::system_clock::now().time_since_epoch();
+    const auto timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time).count();
 
     const codec::HeartbeatMessage heartbeat{
         .ts_ns = static_cast<std::uint64_t>(timestamp_ns),
@@ -574,46 +469,31 @@ void UdpMulticastServerTransport::queueHeartbeat() {
     send_queue.push_back(std::move(frame));
 }
 
-void UdpMulticastServerTransport::queueSessionControl(
-    codec::SessionState state) {
-    const auto unix_time =
-        std::chrono::system_clock::now().time_since_epoch();
-    const auto timestamp_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time)
-            .count();
+void UdpMulticastServerTransport::queueSessionControl(codec::SessionState state) {
+    const auto unix_time = std::chrono::system_clock::now().time_since_epoch();
+    const auto timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(unix_time).count();
 
-    const codec::SessionControlMessage session_control{
-        .ts_ns = static_cast<std::uint64_t>(timestamp_ns),
-        .state = state
-    };
+    const codec::SessionControlMessage session_control{.ts_ns = static_cast<std::uint64_t>(timestamp_ns),
+                                                       .state = state};
 
     EncodedFrame frame{};
-    frame.size = codec::EncodeSessionControl(
-        session_control,
-        frame.bytes);
+    frame.size = codec::EncodeSessionControl(session_control, frame.bytes);
     send_queue.push_back(std::move(frame));
 }
 
 void UdpMulticastServerTransport::resetWakeNotif() {
     std::uint64_t notification_count{};
 
-    const ::ssize_t result = ::read(
-        wake_fd,
-        &notification_count,
-        sizeof(notification_count));
+    const ::ssize_t result = ::read(wake_fd, &notification_count, sizeof(notification_count));
 
     if (result == sizeof(notification_count)) {
         return;
     }
-    if (result == -1 &&
-        (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    if (result == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
         return;
     }
 
-    throw std::system_error(
-        errno,
-        std::generic_category(),
-        "failed to reset eventfd notification");
+    throw std::system_error(errno, std::generic_category(), "failed to reset eventfd notification");
 }
 
 }

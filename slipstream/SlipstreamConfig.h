@@ -14,19 +14,24 @@ enum class ExecutionMode { Wait, Spin, Probe };
 
 [[nodiscard]] constexpr std::string_view ExecutionModeName(ExecutionMode mode) noexcept {
     switch (mode) {
-        case ExecutionMode::Wait: return "engine_wait";
-        case ExecutionMode::Spin: return "engine_spin";
-        case ExecutionMode::Probe: return "engine_probe";
+    case ExecutionMode::Wait:
+        return "engine_wait";
+    case ExecutionMode::Spin:
+        return "engine_spin";
+    case ExecutionMode::Probe:
+        return "engine_probe";
     }
     return "unknown";
 }
 
 [[nodiscard]] inline ExecutionMode ParseExecutionMode(std::string_view value) {
-    if (value == "engine_wait") return ExecutionMode::Wait;
-    if (value == "engine_spin") return ExecutionMode::Spin;
-    if (value == "engine_probe") return ExecutionMode::Probe;
-    throw std::invalid_argument(
-        "--execution-mode must be engine_wait, engine_spin, or engine_probe");
+    if (value == "engine_wait")
+        return ExecutionMode::Wait;
+    if (value == "engine_spin")
+        return ExecutionMode::Spin;
+    if (value == "engine_probe")
+        return ExecutionMode::Probe;
+    throw std::invalid_argument("--execution-mode must be engine_wait, engine_spin, or engine_probe");
 }
 
 struct SlipstreamConfig {
@@ -56,9 +61,6 @@ struct SlipstreamConfig {
     unsigned engine_cpu{5};
 };
 
-[[nodiscard]]
-SlipstreamConfig ParseSlipstreamConfig(
-    int argc,
-    char* argv[]);
+[[nodiscard]] SlipstreamConfig ParseSlipstreamConfig(int argc, char* argv[]);
 
 #endif //SLIPSTREAM_SLIPSTREAMCONFIG_H

@@ -20,11 +20,8 @@ namespace slipstream {
 class UdpMulticastServerTransport final : public IServerTransport {
 public:
     explicit UdpMulticastServerTransport(const SlipstreamConfig& config);
-    UdpMulticastServerTransport(
-        const SlipstreamConfig& config,
-        MarketEventQueue& in,
-        OrderEntryQueue& out,
-        std::atomic<std::uint64_t>& ingress_generation);
+    UdpMulticastServerTransport(const SlipstreamConfig& config, MarketEventQueue& in, OrderEntryQueue& out,
+                                std::atomic<std::uint64_t>& ingress_generation);
     ~UdpMulticastServerTransport() override;
 
     UdpMulticastServerTransport(const UdpMulticastServerTransport&) = delete;
@@ -36,13 +33,9 @@ public:
     void Stop() override;
     void NotifyOutboundReady() override;
 
-    [[nodiscard]]
-    TickToOrderStatistics
-    GetTickToOrderStatistics() const noexcept override;
+    [[nodiscard]] TickToOrderStatistics GetTickToOrderStatistics() const noexcept override;
 
-    [[nodiscard]]
-    const TickToOrderHistogram&
-    GetTickToOrderHistogram() const noexcept override;
+    [[nodiscard]] const TickToOrderHistogram& GetTickToOrderHistogram() const noexcept override;
 
 private:
     void resetWakeNotif();
@@ -52,16 +45,10 @@ private:
     void checkHeartbeat();
     void queueHeartbeat();
     void queueSessionControl(codec::SessionState state);
-    void recvMulticastMarketData(
-        utils::UdpSocket& feed,
-        IEventObserver* observer);
-    void processMulticastMarketData(
-        const codec::MulticastMarketDataDatagram& datagram,
-        std::uint64_t received_at_ns,
-        IEventObserver* observer);
-    void recvOrderEntry(
-        utils::TcpSocket& client,
-        IEventObserver* observer);
+    void recvMulticastMarketData(utils::UdpSocket& feed, IEventObserver* observer);
+    void processMulticastMarketData(const codec::MulticastMarketDataDatagram& datagram, std::uint64_t received_at_ns,
+                                    IEventObserver* observer);
+    void recvOrderEntry(utils::TcpSocket& client, IEventObserver* observer);
     void recvSessionControl(utils::UdpSocket& client);
 
     utils::UdpSocket md_feed_a{};
@@ -84,8 +71,7 @@ private:
 
     std::chrono::steady_clock::time_point last_oe_activity{};
     std::chrono::steady_clock::time_point next_heartbeat{};
-    static constexpr auto heartbeat_interval =
-        std::chrono::seconds{5};
+    static constexpr auto heartbeat_interval = std::chrono::seconds{5};
 };
 
 }
